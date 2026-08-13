@@ -180,11 +180,12 @@
            box-shadow: inset -1px 0 0 var(--grid), 6px 0 8px -6px rgba(0,0,0,0.18);
            width: 1%;   /* shrink to content so the scrolling columns get the space */
   }
-  .steam .trow { display: flex; align-items: center; min-width: 0; max-width: 240px; }
-  .steam .trow .crest { flex: none; }
-  .steam .tname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
-  .steam .pos-chip, .steam .owner-tag { flex: none; }
-  @media (max-width: 760px) { .steam .trow { max-width: calc(44vw - 20px); } }
+  .steam .trow { display: flex; align-items: center; }
+  .steam .trow .crest, .steam .pos-chip, .steam .owner-tag { flex: none; }
+  .steam .tname { white-space: nowrap; }
+  @media (max-width: 760px) {
+    #leagueTableWrap td, #leagueTableWrap th { padding-left: 7px; padding-right: 7px; }
+  }
   tr.zone-qual  .steam { background: linear-gradient(rgba(42,120,214,0.06), rgba(42,120,214,0.06)), var(--surface); }
   tr.zone-promo .steam { background: linear-gradient(rgba(12,163,12,0.06), rgba(12,163,12,0.06)), var(--surface); }
   tr.zone-releg .steam { background: linear-gradient(rgba(211,59,59,0.07), rgba(211,59,59,0.07)), var(--surface); }
