@@ -123,6 +123,10 @@
   tr:last-child td { border-bottom: none; }
   td.league { color: var(--ink-2); font-size: 12.5px; white-space: nowrap; }
   td.team { white-space: nowrap; }
+  .next-game {
+    font-size: 11px; color: var(--muted); margin-top: 1px; padding-left: 27px;
+    max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+  }
   /* anchored Team column: stays visible while the rest scrolls */
   th.sticky, td.sticky {
     position: sticky; left: 0; z-index: 2;
@@ -277,7 +281,7 @@ const ALIASES = {
    APP — no need to edit below
    ================================================================ */
 const $ = (id) => document.getElementById(id);
-const state = { standings:{}, errors:[], notes:[], includeRP:true };
+const state = { standings:{}, fixtures:{}, errors:[], notes:[], includeRP:true, reqCache:{} };
 
 function seasonStrings() {
   const now = new Date();
@@ -325,11 +329,16 @@ function matchTeam(rows, cfgName) {
 }
 
 async function fetchJSON(url) {
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const text = await res.text();
-  if (!text || !text.trim()) return null;          // some APIs send an empty body for missing seasons
-  try { return JSON.parse(text); } catch { return null; }
+  if (!(url in state.reqCache)) {
+    state.reqCache[url] = (async () => {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      if (!text || !text.trim()) return null;      // some APIs send an empty body for missing seasons
+      try { return JSON.parse(text); } catch { return null; }
+    })();
+  }
+  return state.reqCache[url];
 }
 
 function parseEspn(json) {
@@ -409,6 +418,56 @@ async function loadLeague(key) {
     if (!rows.length) throw new Error("empty table");
     return rows;
   }
+}
+
+// --- Upcoming fixtures -------------------------------------------
+async function loadFixtures(key) {
+  const cfg = LEAGUES[key];
+  const out = [];
+  if (cfg.source.espn) {
+    const d = new Date(), e = new Date(Date.now() + 30 * 86400000);
+    const ymd = (x) => `${x.getFullYear()}${String(x.getMonth() + 1).padStart(2, "0")}${String(x.getDate()).padStart(2, "0")}`;
+    const json = await fetchJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${cfg.source.espn}/scoreboard?dates=${ymd(d)}-${ymd(e)}`);
+    for (const ev of (json?.events || [])) {
+      if (ev?.status?.type?.state === "post") continue;
+      const comps = ev?.competitions?.[0]?.competitors || [];
+      const home = comps.find(c => c.homeAway === "home"), away = comps.find(c => c.homeAway === "away");
+      if (!home || !away || !ev.date) continue;
+      out.push({ home: home.team?.displayName, homeShort: home.team?.shortDisplayName,
+                 away: away.team?.displayName, awayShort: away.team?.shortDisplayName,
+                 date: new Date(ev.date) });
+    }
+  } else {
+    const json = await fetchJSON(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${cfg.source.tsdb}&s=${SEASON.tsdb}`);
+    for (const ev of (json?.events || [])) {
+      const hs = parseInt(ev.intHomeScore, 10);
+      if (!isNaN(hs)) continue;                                  // already played
+      const when = ev.strTimestamp ? new Date(ev.strTimestamp) :
+                   ev.dateEvent ? new Date(`${ev.dateEvent}T${ev.strTime || "12:00:00"}`) : null;
+      if (!when || isNaN(+when)) continue;
+      out.push({ home: ev.strHomeTeam, away: ev.strAwayTeam, date: when });
+    }
+  }
+  out.sort((a, b) => a.date - b.date);
+  return out;
+}
+
+function nextFixtureFor(leagueKey, teamName) {
+  const fx = state.fixtures[leagueKey];
+  if (!fx || !teamName) return null;
+  const n = norm(teamName);
+  const cutoff = Date.now() - 3 * 3600000;                       // keep games from the last 3h (in progress)
+  const matches = (x) => x && (x === n || x.includes(n) || n.includes(x));
+  for (const f of fx) {
+    if (+f.date < cutoff) continue;
+    const h = norm(f.home || ""), a = norm(f.away || "");
+    const isHome = matches(h), isAway = matches(a);
+    if (isHome || isAway) {
+      const opp = isHome ? (f.awayShort || f.away) : (f.homeShort || f.home);
+      return { opp, isHome, date: f.date };
+    }
+  }
+  return null;
 }
 
 // --- Scoring -----------------------------------------------------
@@ -496,8 +555,10 @@ function render() {
       const rpCells = useRP
         ? `<td>${plusTags || '<span class="dim">—</span>'}</td>
         <td>${minusTags || '<span class="dim">—</span>'}</td>` : "";
+      const fx = nextFixtureFor(row.league, t?.name || row.teamName);
+      const fxLine = fx ? `<div class="next-game">${fx.isHome ? "vs" : "@"} ${esc(fx.opp)} · ${fx.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>` : "";
       return `<tr>
-        <td class="team sticky">${crest}${esc(row.teamName)}${t ? `<span class="pos-chip">${ordinal(t.rank)}</span>` : `<span class="pos-chip dim">no data</span>`}</td>
+        <td class="team sticky">${crest}${esc(row.teamName)}${t ? `<span class="pos-chip">${ordinal(t.rank)}</span>` : `<span class="pos-chip dim">no data</span>`}${fxLine}</td>
         <td class="league">${lgCfg.flag} ${esc(row.league)}</td>
         <td class="num">${t ? fmt(t.points, 0) : "—"}</td>
         <td class="num dim">${t ? fmt(t.played, 0) : "—"}</td>
@@ -568,10 +629,17 @@ async function loadAll() {
   $("loading").style.display = "block";
   $("banner").classList.remove("show");
   state.errors = []; state.notes = [];
-  await Promise.all(LEAGUE_ORDER.map(async (key) => {
-    try { state.standings[key] = await loadLeague(key); }
-    catch (e) { state.errors.push(`${key} (${e.message})`); state.standings[key] = state.standings[key] || null; }
-  }));
+  state.reqCache = {};
+  await Promise.all(LEAGUE_ORDER.flatMap((key) => [
+    (async () => {
+      try { state.standings[key] = await loadLeague(key); }
+      catch (e) { state.errors.push(`${key} (${e.message})`); state.standings[key] = state.standings[key] || null; }
+    })(),
+    (async () => {
+      try { state.fixtures[key] = await loadFixtures(key); }
+      catch (e) { state.fixtures[key] = state.fixtures[key] || null; }  // fixtures are best-effort
+    })(),
+  ]));
   $("loading").style.display = "none";
   const msgs = [];
   if (state.errors.length) msgs.push(`⚠️ Couldn't load: ${state.errors.join(", ")} — scores shown without those leagues. Try refresh.`);
