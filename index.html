@@ -547,14 +547,20 @@ function renderRules() {
   const lines = LEAGUE_ORDER.map(lg => {
     const r = LEAGUES[lg].rules;
     const bits = [];
-    bits.push(`title ${r.title > 0 ? "+" : ""}${r.title}${r.titleGiant ? ` (only +${r.titleGiantPts} if ${r.titleGiant.join("/")} win)` : ""}`);
+    bits.push(r.titleGiant
+      ? `title +${r.title} <b>(only +${r.titleGiantPts} if ${r.titleGiant.join(" or ")} win${r.titleGiant.length > 1 ? "" : "s"} it)</b>`
+      : `title +${r.title}`);
     if (r.qual) bits.push(`top ${r.qual.spots} (Europe) +${r.qual.pts}`);
     if (r.promo) bits.push(`top ${r.promo.spots} (promotion) +${r.promo.pts}`);
     if (r.releg) bits.push(`bottom ${r.releg.spots} (relegation) ${r.releg.pts}`);
     return `<b>${lg}:</b> ${bits.join(" · ")}`;
   });
   parts.push(`<p>${lines.join("<br>")}</p>`);
-  parts.push(`<p>Rewards and penalties are <b>live</b> — they reflect where teams sit right now and change as the tables change. End-of-season cup and European bonuses get added manually.</p>`);
+  const giantLines = LEAGUE_ORDER.filter(lg => LEAGUES[lg].rules.titleGiant)
+    .map(lg => `${LEAGUES[lg].rules.titleGiant.join(" or ")} (${lg})`);
+  if (giantLines.length) parts.push(
+    `<p><b>⚠️ Favorite-club exception:</b> a league title is worth +10 — unless it's won by the usual favorite, in which case it's only +5. That applies to ${giantLines.join(", ")}. Any other champion in those leagues still earns the full +10.</p>`);
+  parts.push(`<p>A 1st-place team <b>stacks</b> its title points with the Europe/promotion bonus (e.g. Prem leader = 10 + 5). Rewards and penalties are <b>live</b> — they reflect where teams sit right now and change as the tables change. End-of-season cup and European bonuses get added manually.</p>`);
   $("rulesText").innerHTML = parts.join("");
 }
 
