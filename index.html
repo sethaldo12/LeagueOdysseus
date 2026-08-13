@@ -127,6 +127,10 @@
     font-size: 11px; color: var(--muted); margin-top: 1px; padding-left: 27px;
     max-width: 220px; overflow: hidden; text-overflow: ellipsis;
   }
+  .next-game.live, .live-text { color: var(--bad); font-weight: 700; }
+  .live-chip { font-size: 11px; font-weight: 700; color: var(--bad); margin-left: 7px; white-space: nowrap; }
+  @keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+  .next-game.live, .live-chip, .live-text { animation: livePulse 2s ease-in-out infinite; }
   /* anchored Team column: stays visible while the rest scrolls */
   th.sticky, td.sticky {
     position: sticky; left: 0; z-index: 2;
@@ -346,6 +350,53 @@ const WEIGHTS = {
   "Liga Portugal 2|Farense":100, "Liga Portugal 2|Portimonense":94, "Liga Portugal 2|Penafiel":90, "Liga Portugal 2|Lusitânia Lourosa":82,
 };
 
+// --- Full weight tables (every team, from the draft sheet) -------
+// Used on the League Tables tab to show over/under-performance.
+// Teams marked N/A on the sheet are simply omitted (shown as —).
+const ALL_WEIGHTS = {
+  "Prem": { "Arsenal":45, "Manchester City":48, "Manchester United":52, "Aston Villa":56, "Liverpool":58,
+    "AFC Bournemouth":61, "Sunderland":64, "Brighton & Hove Albion":67, "Brentford":70, "Chelsea":73,
+    "Fulham":77, "Newcastle United":81, "Everton":85, "Leeds United":89, "Crystal Palace":93,
+    "Nottingham Forest":97, "Tottenham Hotspur":100, "Coventry City":104, "Ipswich Town":108, "Hull City":112 },
+  "Champ": { "Millwall":54, "Southampton":56, "Middlesbrough":58, "Wrexham":64, "Derby County":67,
+    "Norwich City":70, "Birmingham City":73, "Swansea City":77, "Bristol City":80, "Sheffield United":83,
+    "Preston North End":86, "QPR":89, "Watford":92, "Stoke City":95, "Portsmouth":98, "Charlton Athletic":100,
+    "Blackburn Rovers":104, "West Bromwich Albion":108, "Lincoln City":112, "Cardiff City":116, "Bolton Wanderers":120 },
+  "Serie A": { "Internazionale":45, "Napoli":48, "Roma":52, "Como":56, "AC Milan":58, "Juventus":61,
+    "Atalanta":64, "Bologna":67, "Lazio":70, "Udinese":73, "Sassuolo":77, "Torino":81, "Parma":85,
+    "Cagliari":89, "Fiorentina":93, "Genoa":97, "Lecce":100, "Venezia":104, "Frosinone":108, "Monza":112 },
+  "Serie B": { "Palermo":56, "Catanzaro":58, "Modena":61, "Juve Stabia":64, "Avellino":67, "Mantova":70,
+    "Padova":73, "Cesena":77, "Carrarese":81, "Sampdoria":85, "Virtus Entella":89, "Empoli":93,
+    "Südtirol":97, "Bari":100, "Benevento":104, "LR Vicenza":108, "Arezzo":112 },
+  "La Liga": { "Barcelona":35, "Real Madrid":38, "Villarreal":46, "Atlético Madrid":50, "Real Betis":53,
+    "Celta Vigo":56, "Real Sociedad":59, "Getafe":62, "Osasuna":65, "Espanyol":69, "Girona":73,
+    "Athletic Club":77, "Rayo Vallecano":81, "Valencia":85, "Mallorca":90, "Sevilla":95, "Alavés":100,
+    "Racing Santander":105, "Deportivo La Coruña":110, "Malaga":115 },
+  "La Liga 2": { "Almería":54, "Las Palmas":58, "Castellón":61, "Burgos":64, "Eibar":67, "Córdoba":70,
+    "Sporting Gijón":73, "Ceuta":76, "Albacete":79, "Andorra":82, "Granada":85, "Real Sociedad B":88,
+    "Leganés":92, "Valladolid":96, "Cádiz":100, "Tenerife":104, "Eldense":108, "Sabadell":112, "Celta Fortuna":116 },
+  "Bundesliga": { "Bayern Munich":30, "Borussia Dortmund":45, "RB Leipzig":48, "VfB Stuttgart":54,
+    "TSG Hoffenheim":58, "Bayer Leverkusen":62, "SC Freiburg":66, "Eintracht Frankfurt":70, "FC Augsburg":74,
+    "Mainz 05":78, "Union Berlin":82, "Borussia Mönchengladbach":86, "Hamburger SV":90, "FC Cologne":94,
+    "Werder Bremen":97, "Schalke 04":100, "Elversberg":106, "Paderborn":112 },
+  "2. Bundesliga": { "Hannover 96":56, "Darmstadt 98":58, "1. FC Kaiserslautern":61, "Hertha Berlin":64,
+    "1. FC Nürnberg":67, "VfL Bochum":70, "Karlsruher SC":74, "Dynamo Dresden":78, "Holstein Kiel":82,
+    "Arminia Bielefeld":86, "1. FC Magdeburg":90, "Eintracht Braunschweig":94, "Greuther Fürth":100,
+    "Energie Cottbus":106, "VfL Osnabrück":112 },
+  "Ligue 1": { "Paris Saint-Germain":30, "Lens":45, "Lille":48, "Lyon":54, "Marseille":58, "Rennes":62,
+    "Monaco":66, "Strasbourg":70, "Toulouse":74, "Lorient":78, "Paris FC":82, "Brest":86, "Angers":90,
+    "Le Havre":94, "Auxerre":97, "Nice":100, "Troyes":106, "Le Mans":112 },
+  "Ligue 2": { "Saint-Étienne":54, "Red Star":56, "Rodez":58, "Reims":61, "Annecy":64, "Montpellier":67,
+    "Pau":70, "Dunkerque":74, "Guingamp":78, "Grenoble":82, "Clermont":86, "Nancy":90,
+    "Boulogne-sur-Mer":94, "Laval":100, "Dijon FCO":106, "Sochaux":112 },
+  "Liga Portugal": { "Porto":45, "Sporting CP":48, "Benfica":52, "Braga":56, "Famalicão":58, "Gil Vicente":61,
+    "Moreirense":64, "Arouca":67, "Vitória de Guimarães":70, "Estoril Praia":73, "Alverca":77, "Rio Ave":81,
+    "Santa Clara":85, "Nacional":90, "Estrela da Amadora":95, "Casa Pia":100, "Marítimo":105, "Académico de Viseu":110 },
+  "Liga Portugal 2": { "Torreense":54, "Vizela":56, "Porto B":58, "União de Leiria":61, "Leixões":64,
+    "Feirense":67, "Chaves":70, "Benfica B":74, "Felgueiras":78, "Lusitânia Lourosa":82, "Sporting CP B":86,
+    "Penafiel":90, "Portimonense":94, "Farense":100, "Amarante":106, "Academica":112 },
+};
+
 // --- End-of-season manual bonuses (cups, European runs) ----------
 // Add entries like: { player:"Seth", team:"Real Madrid", label:"Copa del Rey", pts:5 }
 const MANUAL_ADJUSTMENTS = [
@@ -356,6 +407,9 @@ const ALIASES = {
   "psg":"paris saint germain",
   "sporting lisbon":"sporting cp",
   "inter":"internazionale",
+  "inter milan":"internazionale",
+  "koln":"cologne",
+  "qpr":"queens park rangers",
 };
 
 /* ================================================================
@@ -523,7 +577,10 @@ async function loadFixtures(key) {
       if (!home || !away || !ev.date) continue;
       out.push({ home: home.team?.displayName, homeShort: home.team?.shortDisplayName,
                  away: away.team?.displayName, awayShort: away.team?.shortDisplayName,
-                 date: new Date(ev.date) });
+                 date: new Date(ev.date),
+                 state: ev?.status?.type?.state || "pre",
+                 clock: ev?.status?.displayClock || "",
+                 hs: nint(home.score), as: nint(away.score) });
     }
   } else {
     const json = await fetchJSON(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${cfg.source.tsdb}&s=${SEASON.tsdb}`);
@@ -533,7 +590,7 @@ async function loadFixtures(key) {
       const when = ev.strTimestamp ? new Date(ev.strTimestamp) :
                    ev.dateEvent ? new Date(`${ev.dateEvent}T${ev.strTime || "12:00:00"}`) : null;
       if (!when || isNaN(+when)) continue;
-      out.push({ home: ev.strHomeTeam, away: ev.strAwayTeam, date: when });
+      out.push({ home: ev.strHomeTeam, away: ev.strAwayTeam, date: when, state: "pre", clock: "", hs: null, as: null });
     }
   }
   out.sort((a, b) => a.date - b.date);
@@ -558,6 +615,39 @@ function nextFixtureFor(leagueKey, teamName) {
   return null;
 }
 
+// --- Live projection ---------------------------------------------
+// While games are in play, fold the current scorelines into each league table
+// (win = +3, draw = +1, plus goal difference), re-rank, and score off THAT.
+function applyLive() {
+  state.live = {}; state.provisional = {}; state.liveCount = 0;
+  for (const lg of LEAGUE_ORDER) {
+    const rows = state.standings[lg];
+    const liveFx = (state.fixtures[lg] || []).filter(f => f.state === "in" && f.hs != null && f.as != null);
+    state.live[lg] = liveFx;
+    if (!rows || !liveFx.length) { state.provisional[lg] = rows; continue; }
+    state.liveCount += liveFx.length;
+    const clone = rows.map(r => ({ ...r, baseRank: r.rank, live: null }));
+    for (const f of liveFx) {
+      const hRow = matchTeam(clone, f.home), aRow = matchTeam(clone, f.away);
+      const hPts = f.hs > f.as ? 3 : f.hs === f.as ? 1 : 0;
+      const aPts = f.as > f.hs ? 3 : f.hs === f.as ? 1 : 0;
+      if (hRow) {
+        hRow.points += hPts; hRow.gd = (hRow.gd ?? 0) + (f.hs - f.as); hRow.played = (hRow.played || 0) + 1;
+        hRow.live = { clock: f.clock, score: `${f.hs}–${f.as}`, opp: f.awayShort || f.away, isHome: true };
+      }
+      if (aRow) {
+        aRow.points += aPts; aRow.gd = (aRow.gd ?? 0) + (f.as - f.hs); aRow.played = (aRow.played || 0) + 1;
+        aRow.live = { clock: f.clock, score: `${f.as}–${f.hs}`, opp: f.homeShort || f.home, isHome: false };
+      }
+    }
+    clone.sort((x, y) => y.points - x.points || (y.gd ?? 0) - (x.gd ?? 0) || x.baseRank - y.baseRank);
+    clone.forEach((r, i) => { r.rank = i + 1; });
+    state.provisional[lg] = clone;
+  }
+}
+
+function tableFor(lg) { return state.provisional?.[lg] || state.standings[lg]; }
+
 // --- Scoring -----------------------------------------------------
 function liveRewards(leagueKey, row, tableSize) {
   const r = LEAGUES[leagueKey].rules;
@@ -579,7 +669,7 @@ function computePlayer(p) {
   for (const lg of LEAGUE_ORDER) {
     const teamName = p.teams[lg];
     const weight = WEIGHTS[`${lg}|${teamName}`] ?? 100;
-    const table = state.standings[lg];
+    const table = tableFor(lg);
     let row = null, tags = [], w = 0;
     if (table) {
       row = matchTeam(table, teamName);
@@ -643,8 +733,13 @@ function render() {
       const rpCells = useRP
         ? `<td>${plusTags || '<span class="dim">—</span>'}</td>
         <td>${minusTags || '<span class="dim">—</span>'}</td>` : "";
-      const fx = nextFixtureFor(row.league, t?.name || row.teamName);
-      const fxLine = fx ? `<div class="next-game">${fx.isHome ? "vs" : "@"} ${esc(fx.opp)} · ${fx.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>` : "";
+      let fxLine = "";
+      if (t?.live) {
+        fxLine = `<div class="next-game live">⚽ LIVE ${esc(t.live.clock)} · ${t.live.score} ${t.live.isHome ? "vs" : "@"} ${esc(t.live.opp)}</div>`;
+      } else {
+        const fx = nextFixtureFor(row.league, t?.name || row.teamName);
+        if (fx) fxLine = `<div class="next-game">${fx.isHome ? "vs" : "@"} ${esc(fx.opp)} · ${fx.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>`;
+      }
       return `<tr>
         <td class="team sticky">${crest}${esc(row.teamName)}${t ? `<span class="pos-chip">${ordinal(t.rank)}</span>` : `<span class="pos-chip dim">no data</span>`}${fxLine}</td>
         <td class="league">${lgCfg.flag} ${esc(row.league)}</td>
@@ -719,7 +814,7 @@ function findOwner(lg, apiName) {
 }
 
 function rankOf(lg, apiName) {
-  const rows = state.standings[lg];
+  const rows = tableFor(lg);
   if (!rows || !apiName) return null;
   const hit = matchTeam(rows, apiName);
   return hit ? hit.rank : null;
@@ -734,7 +829,7 @@ function ownerTag(p) {
 
 function renderTables() {
   const lg = state.tableLeague;
-  const rows = state.standings[lg];
+  const rows = tableFor(lg);
   const wrap = $("leagueTableWrap");
   if (!rows) { wrap.innerHTML = `<div class="card"><div class="empty-note">No data loaded for ${esc(lg)} yet — try Refresh.</div></div>`; return; }
   const r = LEAGUES[lg].rules;
@@ -745,12 +840,23 @@ function renderTables() {
     if (r.releg && rank > rows.length - r.releg.spots) return "zone-releg";
     return "";
   };
+  // exact/containment only — no fuzzy token matching, so N/A teams never inherit a neighbor's weight
+  const weightNorm = Object.entries(ALL_WEIGHTS[lg] || {}).map(([k, v]) => ({ n: norm(k), v }));
+  const weightFor = (apiName) => {
+    const n = norm(apiName);
+    const exact = weightNorm.find(w => w.n === n);
+    if (exact) return exact.v;
+    const contains = weightNorm.filter(w => w.n.includes(n) || n.includes(w.n));
+    if (!contains.length) return null;
+    contains.sort((a, b) => Math.abs(a.n.length - n.length) - Math.abs(b.n.length - n.length));
+    return contains[0].v;
+  };
   const body = rows.map(t => {
     const owner = map.get(t.name);
-    const weight = owner ? (WEIGHTS[`${lg}|${owner.teams[lg]}`] ?? 100) : null;
+    const weight = owner ? (WEIGHTS[`${lg}|${owner.teams[lg]}`] ?? 100) : weightFor(t.name);
     const crest = t.logo ? `<img class="crest" src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="crest placeholder"></span>`;
     return `<tr class="${zoneOf(t.rank)}">
-      <td class="team steam"><span class="trow">${crest}<span class="tname">${esc(t.name)}</span><span class="pos-chip">${ordinal(t.rank)}</span>${owner ? ownerTag(owner) : ""}</span></td>
+      <td class="team steam"><span class="trow">${crest}<span class="tname">${esc(t.name)}</span><span class="pos-chip">${ordinal(t.rank)}</span>${t.live ? `<span class="live-chip">⚽ ${esc(t.live.clock)} ${t.live.score}</span>` : ""}${owner ? ownerTag(owner) : ""}</span></td>
       <td class="num rowtotal">${t.points}</td>
       <td class="num dim">${weight != null ? weight + "%" : "—"}</td>
       <td class="num">${weight != null ? fmt(t.points * weight / 100) : "—"}</td>
@@ -822,9 +928,13 @@ function renderMatches() {
         <div class="tb-name">${owner ? "<b>" : ""}${esc(name)}${owner ? "</b>" : ""}${rank ? `<span class="pos-chip">${ordinal(rank)}</span>` : ""}</div>
         ${owner ? `<div class="tb-owner">${ownerTag(owner)}</div>` : ""}
       </div>`;
+    const isLive = it.f.state === "in" && it.f.hs != null;
+    const meta = isLive
+      ? `<span class="live-text">⚽ LIVE ${esc(it.f.clock)} · ${it.f.hs}–${it.f.as}</span> · ${LEAGUES[it.lg].flag} ${esc(it.lg)}`
+      : `${time} · ${LEAGUES[it.lg].flag} ${esc(it.lg)}`;
     html += `<div class="match-row">
-      <div class="mr-meta">${time} · ${LEAGUES[it.lg].flag} ${esc(it.lg)}</div>
-      <div class="mr-teams">${block(it.f.home, hr, it.oh)}<span class="mr-vs">vs</span>${block(it.f.away, ar, it.oa)}</div>
+      <div class="mr-meta">${meta}</div>
+      <div class="mr-teams">${block(it.f.home, hr, it.oh)}<span class="mr-vs">${isLive ? `${it.f.hs}–${it.f.as}` : "vs"}</span>${block(it.f.away, ar, it.oa)}</div>
     </div>`;
   }
   wrap.innerHTML = `<div class="card">${html}</div>`;
@@ -880,8 +990,10 @@ async function loadAll() {
     })(),
   ]));
   $("loading").style.display = "none";
+  applyLive();
   const msgs = [];
   if (state.errors.length) msgs.push(`⚠️ Couldn't load: ${state.errors.join(", ")} — scores shown without those leagues. Try refresh.`);
+  if (state.liveCount) msgs.push(`<span class="live-text">⚽ ${state.liveCount} match${state.liveCount > 1 ? "es" : ""} in play</span> — points and rankings include live scores as they stand, and the page refreshes itself every minute.`);
   msgs.push(...state.notes.map(n => `ℹ️ ${n}`));
   if (msgs.length) { $("banner").innerHTML = msgs.join("<br>"); $("banner").classList.add("show"); }
   $("updated").textContent = "Updated " + new Date().toLocaleString(undefined, { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
@@ -889,6 +1001,8 @@ async function loadAll() {
   render();
   renderTables();
   renderMatches();
+  clearTimeout(state.liveTimer);
+  if (state.liveCount) state.liveTimer = setTimeout(loadAll, 60000);   // live scoreboard mode
 }
 
 $("seasonTag").textContent = SEASON.label + " season";
