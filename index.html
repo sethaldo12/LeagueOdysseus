@@ -219,18 +219,51 @@
   .dtab { font: inherit; font-size: 12px; padding: 4px 12px; border-radius: 14px; border: 1px solid var(--border);
           background: none; color: var(--ink-2); cursor: pointer; }
   .dtab.active { background: var(--chip-bg); color: var(--ink); font-weight: 650; }
-  .ev-row { display: flex; gap: 8px; justify-content: center; font-size: 12.5px; padding: 3px 8px; }
-  .ev-min { color: var(--ink-2); min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; flex: none; }
+  /* events timeline — left aligned, minute pills */
+  .events-wrap { max-width: 470px; margin: 0 auto; text-align: left; }
+  .ev-row { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; padding: 4px 6px; }
+  .ev-min { background: var(--chip-bg); color: var(--ink-2); border-radius: 10px; padding: 1px 7px;
+            min-width: 42px; text-align: center; font-variant-numeric: tabular-nums; font-size: 11px; flex: none; }
   .ev-ic { flex: none; }
-  .ev-txt { text-align: left; max-width: 430px; }
-  .lu-wrap { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
-  .lu-col { min-width: 150px; max-width: 220px; text-align: left; font-size: 12.5px; }
-  .lu-head { font-weight: 650; margin-bottom: 5px; }
-  .lu-p { padding: 1px 0; }
-  .st-row { display: flex; justify-content: center; align-items: baseline; gap: 10px; font-size: 12.5px; padding: 2px 0; }
-  .st-l { color: var(--muted); min-width: 150px; text-align: center; }
-  .st-v { min-width: 52px; font-variant-numeric: tabular-nums; font-weight: 600; }
-  .st-head .st-v { color: var(--ink-2); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .ev-txt { line-height: 1.4; }
+  /* lineup pitch */
+  .pitches { display: flex; flex-direction: column; gap: 16px; max-width: 470px; margin: 0 auto; }
+  @media (min-width: 860px) { .pitches { max-width: 960px; flex-direction: row; } .pitch-wrap { flex: 1 1 0; } }
+  .pitch-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700;
+                font-size: 13px; padding: 0 4px 7px; }
+  .pitch-form { font-weight: 600; font-size: 11.5px; color: var(--ink-2); background: var(--chip-bg);
+                border-radius: 12px; padding: 2px 9px; }
+  .pitch { background: linear-gradient(#83c98f, #63b273); border-radius: 12px; padding: 16px 8px 18px;
+           display: flex; flex-direction: column; gap: 18px; position: relative; overflow: hidden; }
+  .pitch::before {   /* penalty box behind the keeper */
+    content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 46%; height: 58px; border: 2px solid rgba(255,255,255,0.35); border-top: none; border-radius: 0 0 6px 6px;
+  }
+  .pitch::after {    /* halfway arc at the bottom */
+    content: ""; position: absolute; bottom: -34px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 60px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%;
+  }
+  .pitch-row { display: flex; justify-content: space-evenly; position: relative; z-index: 1; }
+  .pp { display: flex; flex-direction: column; align-items: center; gap: 3px; max-width: 86px; min-width: 0; }
+  .pp-num { background: rgba(255,255,255,0.92); color: #14331c; font-size: 11.5px; font-weight: 700;
+            border-radius: 50%; width: 27px; height: 27px; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+  .pp-name { font-size: 10.5px; color: #0d2b16; text-align: center; line-height: 1.15; font-weight: 650; }
+  /* stats — tug-of-war bars */
+  .stats-wrap { max-width: 440px; margin: 0 auto; --home-c: #2a78d6; --away-c: #eb6834; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .stats-wrap { --home-c: #3987e5; --away-c: #d95926; }
+  }
+  .stat-teams { display: flex; justify-content: space-between; font-size: 11px; text-transform: uppercase;
+                letter-spacing: 0.05em; padding: 0 2px 8px; }
+  .stat-line { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+  .stat-name { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; flex: 1; padding: 0 8px; }
+  .stat-v { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 40px; }
+  .stat-v.home { color: var(--home-c); text-align: left; }
+  .stat-v.away { color: var(--away-c); text-align: right; }
+  .stat-bar { display: flex; gap: 2px; height: 6px; margin: 5px 0 12px; }
+  .sb-home { background: var(--home-c); border-radius: 4px; }
+  .sb-away { background: var(--away-c); border-radius: 4px; }
   .empty-note { color: var(--muted); font-size: 13.5px; padding: 26px 14px; text-align: center; }
 
   /* Rules footer */
@@ -1028,7 +1061,7 @@ const emptyNote = (t) => `<div class="empty-note">${t}</div>`;
 function sectionEvents(json) {
   const evs = json?.keyEvents || [];
   if (!evs.length) return emptyNote("No match events yet — they appear once the game kicks off.");
-  return evs.map(e => {
+  const rows = evs.map(e => {
     const min = e.clock?.displayValue || "";
     const t = (e.type?.text || "").toLowerCase();
     const icon = t.includes("goal") ? "⚽" : t.includes("yellow") ? "🟨" : t.includes("red") ? "🟥" : t.includes("substitution") ? "🔄" : t.includes("penalty") ? "⚽" : "▪";
@@ -1037,31 +1070,70 @@ function sectionEvents(json) {
     const txt = e.text || `${e.type?.text || "Event"}${who ? " — " + who : ""}`;
     return `<div class="ev-row"><span class="ev-min">${esc(min)}</span><span class="ev-ic">${icon}</span><span class="ev-txt">${esc(txt)}</span></div>`;
   }).join("");
+  return `<div class="events-wrap">${rows}</div>`;
+}
+
+function shortName(n) {
+  if (!n) return "";
+  const parts = n.trim().split(/\s+/);
+  return parts.length > 1 ? parts[0][0] + ". " + parts.slice(1).join(" ") : n;
 }
 
 function sectionLineups(json) {
   const rosters = json?.rosters || [];
-  const cols = rosters.map(r => {
+  const pitches = rosters.map(r => {
     const starters = (r.roster || []).filter(p => p.starter);
     if (!starters.length) return null;
-    return `<div class="lu-col"><div class="lu-head">${esc(r.team?.displayName || "")}${r.formation ? ` <span class="dim">${esc(r.formation)}</span>` : ""}</div>` +
-      starters.map(p => `<div class="lu-p"><span class="dim">${esc(p.jersey || "")}</span> ${esc(p.athlete?.displayName || "")}</div>`).join("") + `</div>`;
+    starters.sort((x, y) => (parseInt(x.formationPlace, 10) || 99) - (parseInt(y.formationPlace, 10) || 99));
+    const gk = starters.find(p => (p.position?.abbreviation || p.position?.name || "").toUpperCase().startsWith("G")) || starters[0];
+    const outfield = starters.filter(p => p !== gk);
+    const lines = (r.formation || "").split("-").map(n => parseInt(n, 10)).filter(n => n > 0);
+    const rows = [];
+    if (lines.length && lines.reduce((a2, b2) => a2 + b2, 0) === outfield.length) {
+      let i = 0;
+      for (const n of lines) { rows.push(outfield.slice(i, i + n)); i += n; }
+    } else {
+      for (let i = 0; i < outfield.length; i += 4) rows.push(outfield.slice(i, i + 4));
+    }
+    const player = (p) => `<div class="pp"><span class="pp-num">${esc(p.jersey || "–")}</span><span class="pp-name">${esc(shortName(p.athlete?.displayName))}</span></div>`;
+    return `<div class="pitch-wrap">
+      <div class="pitch-head"><span>${esc(r.team?.displayName || "")}</span>${r.formation ? `<span class="pitch-form">${esc(r.formation)}</span>` : ""}</div>
+      <div class="pitch">
+        <div class="pitch-row">${player(gk)}</div>
+        ${rows.map(row => `<div class="pitch-row">${row.map(player).join("")}</div>`).join("")}
+      </div></div>`;
   }).filter(Boolean);
-  if (!cols.length) return emptyNote("Lineups not posted yet — they usually appear about an hour before kickoff.");
-  return `<div class="lu-wrap">${cols.join("")}</div>`;
+  if (!pitches.length) return emptyNote("Lineups not posted yet — they usually appear about an hour before kickoff.");
+  return `<div class="pitches">${pitches.join("")}</div>`;
 }
+
+const STAT_ORDER = [
+  ["possessionPct", "Possession %"], ["totalShots", "Shots"], ["shotsOnTarget", "Shots on target"],
+  ["wonCorners", "Corners"], ["foulsCommitted", "Fouls"], ["saves", "Saves"], ["offsides", "Offsides"],
+  ["yellowCards", "Yellow cards"], ["redCards", "Red cards"], ["totalPasses", "Passes"], ["passPct", "Pass accuracy %"],
+];
 
 function sectionStats(json) {
   const teams = json?.boxscore?.teams || [];
   if (teams.length < 2) return emptyNote("Match stats aren't available for this game.");
   const [a, b] = teams;
-  const bMap = {};
-  for (const s of (b.statistics || [])) bMap[s.name] = s.displayValue;
-  const rows = (a.statistics || []).filter(s => bMap[s.name] !== undefined).map(s =>
-    `<div class="st-row"><span class="st-v">${esc(s.displayValue)}</span><span class="st-l">${esc(s.label || s.name)}</span><span class="st-v">${esc(bMap[s.name])}</span></div>`).join("");
-  if (!rows) return emptyNote("Match stats aren't available for this game.");
-  const head = `<div class="st-row st-head"><span class="st-v">${esc(a.team?.abbreviation || a.team?.displayName || "")}</span><span class="st-l"></span><span class="st-v">${esc(b.team?.abbreviation || b.team?.displayName || "")}</span></div>`;
-  return head + rows;
+  const aMap = {}, bMap = {};
+  for (const s of (a.statistics || [])) aMap[s.name] = s;
+  for (const s of (b.statistics || [])) bMap[s.name] = s;
+  let picks = STAT_ORDER.filter(([k]) => aMap[k] && bMap[k]);
+  if (picks.length < 3) picks = (a.statistics || []).filter(s => bMap[s.name]).map(s => [s.name, s.label || s.name]);
+  if (!picks.length) return emptyNote("Match stats aren't available for this game.");
+  const rows = picks.map(([k, label]) => {
+    const av = aMap[k].displayValue, bv = bMap[k].displayValue;
+    const an = parseFloat(av) || 0, bn = parseFloat(bv) || 0;
+    const ap = (an + bn) ? an / (an + bn) * 100 : 50;
+    return `<div class="stat-block">
+      <div class="stat-line"><span class="stat-v home">${esc(av)}</span><span class="stat-name">${esc(label)}</span><span class="stat-v away">${esc(bv)}</span></div>
+      <div class="stat-bar"><span class="sb-home" style="width:${ap.toFixed(1)}%"></span><span class="sb-away" style="width:${(100 - ap).toFixed(1)}%"></span></div>
+    </div>`;
+  }).join("");
+  const head = `<div class="stat-teams"><span class="stat-v home">${esc(a.team?.abbreviation || a.team?.displayName || "")}</span><span class="stat-v away">${esc(b.team?.abbreviation || b.team?.displayName || "")}</span></div>`;
+  return `<div class="stats-wrap">${head}${rows}</div>`;
 }
 
 // --- Tabs ---------------------------------------------------------
