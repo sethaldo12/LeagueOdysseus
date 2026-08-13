@@ -239,8 +239,10 @@
   .tb-name b { font-weight: 750; }
   .tb-home .crest { margin: 0 0 0 7px; }
   .tb-away .crest { margin: 0 7px 0 0; }
-  .tb-owner { margin-top: 3px; }
-  .tb-owner .owner-tag { margin-left: 0; }
+  .tb-sub { display: flex; align-items: center; gap: 5px; margin-top: 4px; flex-wrap: wrap; }
+  .tb-home .tb-sub { justify-content: flex-end; }
+  .tb-away .tb-sub { justify-content: flex-start; }
+  .tb-sub .pos-chip, .tb-sub .owner-tag { margin-left: 0; }
   .mr-score { text-align: center; font-weight: 800; font-size: 15px; min-width: 48px; font-variant-numeric: tabular-nums; }
   .mr-score.live { color: var(--bad); }
   .mr-lg { font-size: 10.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
@@ -1058,8 +1060,8 @@ function renderMatches() {
         : `<span class="crest placeholder"></span>`;
     };
     const side = (name, rank, owner, isHome) => `<div class="team-block ${isHome ? "tb-home" : "tb-away"}">
-        <div class="tb-name">${isHome ? "" : crestFor(name)}${owner ? "<b>" : ""}${esc(name)}${owner ? "</b>" : ""}${rank ? `<span class="pos-chip">${ordinal(rank)}</span>` : ""}${isHome ? crestFor(name) : ""}</div>
-        ${owner ? `<div class="tb-owner">${ownerTag(owner)}</div>` : ""}
+        <div class="tb-name">${isHome ? "" : crestFor(name)}${owner ? "<b>" : ""}${esc(name)}${owner ? "</b>" : ""}${isHome ? crestFor(name) : ""}</div>
+        ${(rank || owner) ? `<div class="tb-sub">${rank ? `<span class="pos-chip">${ordinal(rank)}</span>` : ""}${owner ? ownerTag(owner) : ""}</div>` : ""}
       </div>`;
     const isLive = it.f.state === "in" && it.f.hs != null;
     const isFT = it.f.state === "post" && it.f.hs != null;
@@ -1073,7 +1075,7 @@ function renderMatches() {
         <div class="mr-score ${isLive ? "live" : ""}">${(isLive || isFT) ? `${it.f.hs} – ${it.f.as}` : "vs"}</div>
         ${side(it.f.away, ar, it.oa, false)}
       </div>
-      <div class="mr-bottom">${status}<span class="mr-lg">${LEAGUES[it.lg].flag} ${esc(it.lg)}</span></div>
+      <div class="mr-bottom"><span class="mr-lg">${LEAGUES[it.lg].flag} ${esc(it.lg)}</span>${status}</div>
       ${open ? `<div class="match-detail" id="matchDetail"><div class="empty-note">Loading match details…</div></div>` : ""}
     </div>`;
   }
