@@ -235,10 +235,14 @@
   .team-block { min-width: 0; }
   .tb-home { text-align: right; }
   .tb-away { text-align: left; }
-  .tb-name { font-size: 13px; line-height: 1.3; }
+  .tb-name { font-size: 13px; line-height: 1.3; display: flex; align-items: center; gap: 7px; }
+  .tb-home .tb-name { justify-content: flex-end; }
+  .tb-away .tb-name { justify-content: flex-start; }
+  .tb-name .nm { min-width: 0; }
+  .tb-home .nm { text-align: right; }
+  .tb-away .nm { text-align: left; }
   .tb-name b { font-weight: 750; }
-  .tb-home .crest { margin: 0 0 0 7px; }
-  .tb-away .crest { margin: 0 7px 0 0; }
+  .tb-name .crest { margin: 0; flex: none; }
   .tb-sub { display: flex; align-items: center; gap: 5px; margin-top: 4px; flex-wrap: wrap; }
   .tb-home .tb-sub { justify-content: flex-end; }
   .tb-away .tb-sub { justify-content: flex-start; }
@@ -1059,10 +1063,13 @@ function renderMatches() {
         ? `<img class="crest" src="${esc(row.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`
         : `<span class="crest placeholder"></span>`;
     };
-    const side = (name, rank, owner, isHome) => `<div class="team-block ${isHome ? "tb-home" : "tb-away"}">
-        <div class="tb-name">${isHome ? "" : crestFor(name)}${owner ? "<b>" : ""}${esc(name)}${owner ? "</b>" : ""}${isHome ? crestFor(name) : ""}</div>
+    const side = (full, short, rank, owner, isHome) => {
+      const label = `<span class="nm">${owner ? "<b>" : ""}${esc(short || full)}${owner ? "</b>" : ""}</span>`;
+      return `<div class="team-block ${isHome ? "tb-home" : "tb-away"}">
+        <div class="tb-name">${isHome ? label + crestFor(full) : crestFor(full) + label}</div>
         ${(rank || owner) ? `<div class="tb-sub">${rank ? `<span class="pos-chip">${ordinal(rank)}</span>` : ""}${owner ? ownerTag(owner) : ""}</div>` : ""}
       </div>`;
+    };
     const isLive = it.f.state === "in" && it.f.hs != null;
     const isFT = it.f.state === "post" && it.f.hs != null;
     const status = isLive ? `<span class="ms ms-live">${esc(it.f.clock)}</span>`
@@ -1071,9 +1078,9 @@ function renderMatches() {
     const open = state.openMatch === it.key;
     html += `<div class="match-row ${open ? "open" : ""}" data-key="${esc(it.key)}">
       <div class="mr-grid">
-        ${side(it.f.home, hr, it.oh, true)}
+        ${side(it.f.home, it.f.homeShort, hr, it.oh, true)}
         <div class="mr-score ${isLive ? "live" : ""}">${(isLive || isFT) ? `${it.f.hs} – ${it.f.as}` : "vs"}</div>
-        ${side(it.f.away, ar, it.oa, false)}
+        ${side(it.f.away, it.f.awayShort, ar, it.oa, false)}
       </div>
       <div class="mr-bottom"><span class="mr-lg">${LEAGUES[it.lg].flag} ${esc(it.lg)}</span>${status}</div>
       ${open ? `<div class="match-detail" id="matchDetail"><div class="empty-note">Loading match details…</div></div>` : ""}
