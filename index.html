@@ -58,8 +58,9 @@
   button.refresh:hover { border-color: var(--muted); }
   /* Rewards & penalties slider toggle */
   .togglebar {
-    display: flex; align-items: center; gap: 10px; margin: 0 2px 18px;
+    display: flex; align-items: center; gap: 10px; margin: 0 2px 18px; flex-wrap: wrap;
   }
+  .tb-sep { width: 1px; height: 20px; background: var(--grid); }
   label.switch { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; }
   label.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
   label.switch .track {
@@ -250,6 +251,13 @@
         <span class="switch-label">Rewards &amp; penalties</span>
       </label>
       <span class="switch-hint" id="switchHint">hidden — weighted points only</span>
+      <span class="tb-sep" aria-hidden="true"></span>
+      <label class="switch" title="Fold in-play scores into points and rankings as if they held">
+        <input type="checkbox" id="liveToggle">
+        <span class="track" aria-hidden="true"></span>
+        <span class="switch-label">Live scoring</span>
+      </label>
+      <span class="switch-hint" id="liveHint">off — points update at full-time</span>
     </div>
     <section class="players" id="players"></section>
     <details class="rules">
@@ -416,7 +424,7 @@ const ALIASES = {
    APP — no need to edit below
    ================================================================ */
 const $ = (id) => document.getElementById(id);
-const state = { standings:{}, fixtures:{}, ownerMaps:{}, errors:[], notes:[], includeRP:false, reqCache:{},
+const state = { standings:{}, fixtures:{}, ownerMaps:{}, errors:[], notes:[], includeRP:false, useLive:false, reqCache:{},
                 tab:"home", tableLeague:LEAGUE_ORDER[0], weeks:[], matchWeek:0, matchPlayer:"all" };
 
 function seasonStrings() {
@@ -622,23 +630,30 @@ function applyLive() {
   state.live = {}; state.provisional = {}; state.liveCount = 0;
   for (const lg of LEAGUE_ORDER) {
     const rows = state.standings[lg];
+    if (rows) rows.forEach(r => { r.live = null; });
     const liveFx = (state.fixtures[lg] || []).filter(f => f.state === "in" && f.hs != null && f.as != null);
     state.live[lg] = liveFx;
     if (!rows || !liveFx.length) { state.provisional[lg] = rows; continue; }
     state.liveCount += liveFx.length;
     const clone = rows.map(r => ({ ...r, baseRank: r.rank, live: null }));
     for (const f of liveFx) {
-      const hRow = matchTeam(clone, f.home), aRow = matchTeam(clone, f.away);
       const hPts = f.hs > f.as ? 3 : f.hs === f.as ? 1 : 0;
       const aPts = f.as > f.hs ? 3 : f.hs === f.as ? 1 : 0;
+      const hLive = { clock: f.clock, score: `${f.hs}–${f.as}`, opp: f.awayShort || f.away, isHome: true };
+      const aLive = { clock: f.clock, score: `${f.as}–${f.hs}`, opp: f.homeShort || f.home, isHome: false };
+      const hRow = matchTeam(clone, f.home), aRow = matchTeam(clone, f.away);
       if (hRow) {
         hRow.points += hPts; hRow.gd = (hRow.gd ?? 0) + (f.hs - f.as); hRow.played = (hRow.played || 0) + 1;
-        hRow.live = { clock: f.clock, score: `${f.hs}–${f.as}`, opp: f.awayShort || f.away, isHome: true };
+        hRow.live = hLive;
       }
       if (aRow) {
         aRow.points += aPts; aRow.gd = (aRow.gd ?? 0) + (f.as - f.hs); aRow.played = (aRow.played || 0) + 1;
-        aRow.live = { clock: f.clock, score: `${f.as}–${f.hs}`, opp: f.homeShort || f.home, isHome: false };
+        aRow.live = aLive;
       }
+      // annotate the static rows too, so live scores stay visible even when live scoring is off
+      const hBase = matchTeam(rows, f.home), aBase = matchTeam(rows, f.away);
+      if (hBase) hBase.live = hLive;
+      if (aBase) aBase.live = aLive;
     }
     clone.sort((x, y) => y.points - x.points || (y.gd ?? 0) - (x.gd ?? 0) || x.baseRank - y.baseRank);
     clone.forEach((r, i) => { r.rank = i + 1; });
@@ -646,7 +661,7 @@ function applyLive() {
   }
 }
 
-function tableFor(lg) { return state.provisional?.[lg] || state.standings[lg]; }
+function tableFor(lg) { return (state.useLive && state.provisional?.[lg]) || state.standings[lg]; }
 
 // --- Scoring -----------------------------------------------------
 function liveRewards(leagueKey, row, tableSize) {
@@ -974,6 +989,19 @@ function renderRules() {
   $("rulesText").innerHTML = parts.join("");
 }
 
+function updateBanner() {
+  const msgs = [];
+  if (state.errors.length) msgs.push(`⚠️ Couldn't load: ${state.errors.join(", ")} — scores shown without those leagues. Try refresh.`);
+  if (state.liveCount) {
+    msgs.push(state.useLive
+      ? `<span class="live-text">⚽ ${state.liveCount} match${state.liveCount > 1 ? "es" : ""} in play</span> — points and rankings include live scores as they stand, and the page refreshes itself every minute.`
+      : `<span class="live-text">⚽ ${state.liveCount} match${state.liveCount > 1 ? "es" : ""} in play</span> — live scoring is off, so points update at full-time. Flip the Live scoring switch to project them now.`);
+  }
+  msgs.push(...state.notes.map(n => `ℹ️ ${n}`));
+  $("banner").innerHTML = msgs.join("<br>");
+  $("banner").classList.toggle("show", msgs.length > 0);
+}
+
 async function loadAll() {
   $("loading").style.display = "block";
   $("banner").classList.remove("show");
@@ -991,11 +1019,7 @@ async function loadAll() {
   ]));
   $("loading").style.display = "none";
   applyLive();
-  const msgs = [];
-  if (state.errors.length) msgs.push(`⚠️ Couldn't load: ${state.errors.join(", ")} — scores shown without those leagues. Try refresh.`);
-  if (state.liveCount) msgs.push(`<span class="live-text">⚽ ${state.liveCount} match${state.liveCount > 1 ? "es" : ""} in play</span> — points and rankings include live scores as they stand, and the page refreshes itself every minute.`);
-  msgs.push(...state.notes.map(n => `ℹ️ ${n}`));
-  if (msgs.length) { $("banner").innerHTML = msgs.join("<br>"); $("banner").classList.add("show"); }
+  updateBanner();
   $("updated").textContent = "Updated " + new Date().toLocaleString(undefined, { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
   for (const lg of LEAGUE_ORDER) state.ownerMaps[lg] = buildOwnerMap(lg);
   render();
@@ -1019,6 +1043,14 @@ $("rpToggle").addEventListener("change", (e) => {
   state.includeRP = e.target.checked;
   $("switchHint").textContent = state.includeRP ? "included in scores" : "hidden — weighted points only";
   render();
+});
+$("liveToggle").addEventListener("change", (e) => {
+  state.useLive = e.target.checked;
+  $("liveHint").textContent = state.useLive ? "on — includes in-play scores" : "off — points update at full-time";
+  updateBanner();
+  render();
+  renderTables();
+  renderMatches();
 });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 loadAll();
