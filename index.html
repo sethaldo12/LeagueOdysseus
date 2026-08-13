@@ -937,11 +937,12 @@ function renderTables() {
     return contains[0].v;
   };
   const short = state.tableView === "short";
+  const teamClass = short ? "team" : "team steam";   // Short: plain table, no anchored column
   const body = rows.map(t => {
     const owner = map.get(t.name);
     const weight = owner ? (WEIGHTS[`${lg}|${owner.teams[lg]}`] ?? 100) : weightFor(t.name);
     const crest = t.logo ? `<img class="crest" src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="crest placeholder"></span>`;
-    const teamCell = `<td class="team steam"><span class="trow">${crest}<span class="tname">${esc(t.name)}</span><span class="pos-chip">${ordinal(t.rank)}</span>${t.live ? `<span class="live-chip">⚽ ${esc(t.live.clock)} ${t.live.score}</span>` : ""}${owner ? ownerTag(owner) : ""}</span></td>`;
+    const teamCell = `<td class="${teamClass}"><span class="trow">${crest}<span class="tname">${esc(t.name)}</span><span class="pos-chip">${ordinal(t.rank)}</span>${t.live ? `<span class="live-chip">⚽ ${esc(t.live.clock)} ${t.live.score}</span>` : ""}${owner ? ownerTag(owner) : ""}</span></td>`;
     const wtd = weight != null ? fmt(t.points * weight / 100) : "—";
     if (short) return `<tr class="${zoneOf(t.rank)}">
       ${teamCell}
@@ -966,7 +967,7 @@ function renderTables() {
   if (r.promo) legend.push(`<span class="zl"><span class="sw" style="background:rgba(12,163,12,0.35)"></span>Promotion (top ${r.promo.spots})</span>`);
   if (r.releg) legend.push(`<span class="zl"><span class="sw" style="background:rgba(211,59,59,0.4)"></span>Relegation (bottom ${r.releg.spots})</span>`);
   const head = short
-    ? `<th class="steam">Team</th><th class="num">Pts</th><th class="num">Weighted</th><th class="num">GP</th>`
+    ? `<th>Team</th><th class="num">Pts</th><th class="num">Weighted</th><th class="num">GP</th>`
     : `<th class="steam">Team</th><th class="num">Pts</th><th class="num">Weight</th><th class="num">Weighted</th><th class="num">GP</th><th class="num">W</th>
     <th class="num">D</th><th class="num">L</th><th class="num">GD</th>`;
   wrap.innerHTML = `<div class="card"><div class="tbl-scroll"><table style="min-width:${short ? 320 : 560}px">
