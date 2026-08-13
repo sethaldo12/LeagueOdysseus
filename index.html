@@ -195,14 +195,16 @@
 
   /* Upcoming Matches tab */
   .match-day { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
-               font-weight: 650; padding: 14px 14px 6px; }
-  .match-row {
-    display: flex; align-items: center; gap: 10px; padding: 9px 14px;
-    border-top: 1px solid var(--grid); font-size: 13.5px; flex-wrap: wrap;
-  }
-  .match-row .mr-time { color: var(--ink-2); font-variant-numeric: tabular-nums; width: 74px; flex: none; }
-  .match-row .mr-league { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
-  .match-row .mr-teams b { font-weight: 700; }
+               font-weight: 650; padding: 14px 14px 6px; text-align: center; }
+  .match-row { padding: 12px 14px 14px; border-top: 1px solid var(--grid); text-align: center; }
+  .mr-meta { font-size: 12px; color: var(--muted); margin-bottom: 7px; }
+  .mr-teams { display: flex; justify-content: center; align-items: flex-start; gap: 12px; }
+  .team-block { flex: 1 1 0; max-width: 250px; text-align: center; min-width: 0; }
+  .tb-name { font-size: 13.5px; }
+  .tb-name b { font-weight: 700; }
+  .tb-owner { margin-top: 4px; }
+  .tb-owner .owner-tag { margin-left: 0; }
+  .mr-vs { color: var(--muted); font-size: 12px; padding-top: 3px; flex: none; }
   .empty-note { color: var(--muted); font-size: 13.5px; padding: 26px 14px; text-align: center; }
 
   /* Rules footer */
@@ -239,11 +241,11 @@
     <section class="tiles" id="tiles"></section>
     <div class="togglebar">
       <label class="switch" title="Include live rewards & penalties in the scores">
-        <input type="checkbox" id="rpToggle" checked>
+        <input type="checkbox" id="rpToggle">
         <span class="track" aria-hidden="true"></span>
         <span class="switch-label">Rewards &amp; penalties</span>
       </label>
-      <span class="switch-hint" id="switchHint">included in scores</span>
+      <span class="switch-hint" id="switchHint">hidden — weighted points only</span>
     </div>
     <section class="players" id="players"></section>
     <details class="rules">
@@ -360,7 +362,7 @@ const ALIASES = {
    APP — no need to edit below
    ================================================================ */
 const $ = (id) => document.getElementById(id);
-const state = { standings:{}, fixtures:{}, ownerMaps:{}, errors:[], notes:[], includeRP:true, reqCache:{},
+const state = { standings:{}, fixtures:{}, ownerMaps:{}, errors:[], notes:[], includeRP:false, reqCache:{},
                 tab:"home", tableLeague:LEAGUE_ORDER[0], weeks:[], matchWeek:0, matchPlayer:"all" };
 
 function seasonStrings() {
@@ -745,10 +747,13 @@ function renderTables() {
   };
   const body = rows.map(t => {
     const owner = map.get(t.name);
+    const weight = owner ? (WEIGHTS[`${lg}|${owner.teams[lg]}`] ?? 100) : null;
     const crest = t.logo ? `<img class="crest" src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="crest placeholder"></span>`;
     return `<tr class="${zoneOf(t.rank)}">
       <td class="team steam"><span class="trow">${crest}<span class="tname">${esc(t.name)}</span><span class="pos-chip">${ordinal(t.rank)}</span>${owner ? ownerTag(owner) : ""}</span></td>
       <td class="num rowtotal">${t.points}</td>
+      <td class="num dim">${weight != null ? weight + "%" : "—"}</td>
+      <td class="num">${weight != null ? fmt(t.points * weight / 100) : "—"}</td>
       <td class="num dim">${t.played ?? "—"}</td>
       <td class="num dim">${t.w ?? "—"}</td>
       <td class="num dim">${t.d ?? "—"}</td>
@@ -761,7 +766,7 @@ function renderTables() {
   if (r.promo) legend.push(`<span class="zl"><span class="sw" style="background:rgba(12,163,12,0.35)"></span>Promotion (top ${r.promo.spots})</span>`);
   if (r.releg) legend.push(`<span class="zl"><span class="sw" style="background:rgba(211,59,59,0.4)"></span>Relegation (bottom ${r.releg.spots})</span>`);
   wrap.innerHTML = `<div class="card"><div class="tbl-scroll"><table style="min-width:560px">
-    <thead><tr><th class="steam">Team</th><th class="num">Pts</th><th class="num">GP</th><th class="num">W</th>
+    <thead><tr><th class="steam">Team</th><th class="num">Pts</th><th class="num">Weight</th><th class="num">Weighted</th><th class="num">GP</th><th class="num">W</th>
     <th class="num">D</th><th class="num">L</th><th class="num">GD</th></tr></thead>
     <tbody>${body}</tbody></table></div>
     <div class="zone-legend">${legend.join("")}</div></div>`;
@@ -813,14 +818,13 @@ function renderMatches() {
     if (dayKey !== lastDay) { html += `<div class="match-day">${dayKey}</div>`; lastDay = dayKey; }
     const time = it.f.date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     const hr = rankOf(it.lg, it.f.home), ar = rankOf(it.lg, it.f.away);
-    const hrChip = hr ? `<span class="pos-chip">${ordinal(hr)}</span>` : "";
-    const arChip = ar ? `<span class="pos-chip">${ordinal(ar)}</span>` : "";
-    const homeName = `${it.oh ? "<b>" : ""}${esc(it.f.home)}${it.oh ? "</b>" : ""}${hrChip}${it.oh ? ownerTag(it.oh) : ""}`;
-    const awayName = `${it.oa ? "<b>" : ""}${esc(it.f.away)}${it.oa ? "</b>" : ""}${arChip}${it.oa ? ownerTag(it.oa) : ""}`;
+    const block = (name, rank, owner) => `<div class="team-block">
+        <div class="tb-name">${owner ? "<b>" : ""}${esc(name)}${owner ? "</b>" : ""}${rank ? `<span class="pos-chip">${ordinal(rank)}</span>` : ""}</div>
+        ${owner ? `<div class="tb-owner">${ownerTag(owner)}</div>` : ""}
+      </div>`;
     html += `<div class="match-row">
-      <span class="mr-time">${time}</span>
-      <span class="mr-teams">${homeName} <span class="dim">vs</span> ${awayName}</span>
-      <span class="mr-league">${LEAGUES[it.lg].flag} ${esc(it.lg)}</span>
+      <div class="mr-meta">${time} · ${LEAGUES[it.lg].flag} ${esc(it.lg)}</div>
+      <div class="mr-teams">${block(it.f.home, hr, it.oh)}<span class="mr-vs">vs</span>${block(it.f.away, ar, it.oa)}</div>
     </div>`;
   }
   wrap.innerHTML = `<div class="card">${html}</div>`;
