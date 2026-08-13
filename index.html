@@ -283,7 +283,9 @@ function matchTeam(rows, cfgName) {
 async function fetchJSON(url) {
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const text = await res.text();
+  if (!text || !text.trim()) return null;          // some APIs send an empty body for missing seasons
+  try { return JSON.parse(text); } catch { return null; }
 }
 
 function parseEspn(json) {
@@ -318,11 +320,10 @@ async function loadLeague(key) {
     return rows;
   } else {
     const base = `https://www.thesportsdb.com/api/v1/json/123/lookuptable.php?l=${cfg.source.tsdb}`;
-    let json = await fetchJSON(`${base}&s=${SEASON.tsdb}`);
-    let rows = parseTsdb(json);
+    let rows = [];
+    try { rows = parseTsdb(await fetchJSON(`${base}&s=${SEASON.tsdb}`)); } catch (e) { /* fall through */ }
     if (!rows.length) {
-      json = await fetchJSON(`${base}&s=${SEASON.tsdbPrev}`);
-      rows = parseTsdb(json);
+      rows = parseTsdb(await fetchJSON(`${base}&s=${SEASON.tsdbPrev}`));
       if (rows.length) state.notes.push(`${key}: new season table not published yet — showing last season for now.`);
     }
     if (!rows.length) throw new Error("empty table");
