@@ -150,6 +150,47 @@
   tr.totals td { border-top: 2px solid var(--grid); font-weight: 700; background: color-mix(in srgb, var(--chip-bg) 60%, transparent); }
   .dim { color: var(--muted); }
 
+  /* Tabs */
+  nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--grid); margin: 0 0 18px; }
+  nav.tabs .tab {
+    font: inherit; font-size: 14px; background: none; border: none; cursor: pointer;
+    color: var(--ink-2); padding: 9px 14px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  nav.tabs .tab:hover { color: var(--ink); }
+  nav.tabs .tab.active { color: var(--ink); font-weight: 650; border-bottom-color: var(--ink); }
+
+  /* Filter controls */
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .controls select {
+    font: inherit; font-size: 13.5px; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; max-width: 100%;
+  }
+
+  /* League Tables tab */
+  .owner-tag {
+    display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 5px;
+    padding: 1px 7px; margin-left: 7px; text-transform: uppercase; letter-spacing: 0.04em;
+    vertical-align: 1px;
+  }
+  tr.zone-qual   td { background: rgba(42,120,214,0.06); }
+  tr.zone-promo  td { background: rgba(12,163,12,0.06); }
+  tr.zone-releg  td { background: rgba(211,59,59,0.07); }
+  .zone-legend { font-size: 12px; color: var(--muted); padding: 10px 14px; display: flex; gap: 16px; flex-wrap: wrap; }
+  .zone-legend .zl { display: inline-flex; align-items: center; gap: 6px; }
+  .zone-legend .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  /* Upcoming Matches tab */
+  .match-day { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+               font-weight: 650; padding: 14px 14px 6px; }
+  .match-row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+    border-top: 1px solid var(--grid); font-size: 13.5px; flex-wrap: wrap;
+  }
+  .match-row .mr-time { color: var(--ink-2); font-variant-numeric: tabular-nums; width: 74px; flex: none; }
+  .match-row .mr-league { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
+  .match-row .mr-teams b { font-weight: 700; }
+  .empty-note { color: var(--muted); font-size: 13.5px; padding: 26px 14px; text-align: center; }
+
   /* Rules footer */
   details.rules { margin-top: 30px; color: var(--ink-2); font-size: 13.5px; }
   details.rules summary { cursor: pointer; font-weight: 600; color: var(--ink); }
@@ -171,22 +212,46 @@
   </header>
 
   <div class="banner" id="banner"></div>
-  <section class="tiles" id="tiles"></section>
-  <div class="togglebar">
-    <label class="switch" title="Include live rewards & penalties in the scores">
-      <input type="checkbox" id="rpToggle" checked>
-      <span class="track" aria-hidden="true"></span>
-      <span class="switch-label">Rewards &amp; penalties</span>
-    </label>
-    <span class="switch-hint" id="switchHint">included in scores</span>
-  </div>
-  <div class="loading" id="loading">Loading league tables…</div>
-  <section class="players" id="players"></section>
 
-  <details class="rules">
-    <summary>Scoring rules</summary>
-    <div class="inner" id="rulesText"></div>
-  </details>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="home" role="tab">Home</button>
+    <button class="tab" data-tab="tables" role="tab">League Tables</button>
+    <button class="tab" data-tab="matches" role="tab">Upcoming Matches</button>
+  </nav>
+
+  <div class="loading" id="loading">Loading league tables…</div>
+
+  <div id="view-home">
+    <section class="tiles" id="tiles"></section>
+    <div class="togglebar">
+      <label class="switch" title="Include live rewards & penalties in the scores">
+        <input type="checkbox" id="rpToggle" checked>
+        <span class="track" aria-hidden="true"></span>
+        <span class="switch-label">Rewards &amp; penalties</span>
+      </label>
+      <span class="switch-hint" id="switchHint">included in scores</span>
+    </div>
+    <section class="players" id="players"></section>
+    <details class="rules">
+      <summary>Scoring rules</summary>
+      <div class="inner" id="rulesText"></div>
+    </details>
+  </div>
+
+  <div id="view-tables" hidden>
+    <div class="controls">
+      <select id="leagueSelect" aria-label="Choose league"></select>
+    </div>
+    <div id="leagueTableWrap"></div>
+  </div>
+
+  <div id="view-matches" hidden>
+    <div class="controls">
+      <select id="weekSelect" aria-label="Choose week"></select>
+      <select id="playerSelect" aria-label="Choose player"></select>
+    </div>
+    <div id="matchesWrap"></div>
+  </div>
 
   <footer class="pagefoot">
     Base score = league points × team weight. Rewards & penalties update live with the tables.<br>
@@ -281,7 +346,8 @@ const ALIASES = {
    APP — no need to edit below
    ================================================================ */
 const $ = (id) => document.getElementById(id);
-const state = { standings:{}, fixtures:{}, errors:[], notes:[], includeRP:true, reqCache:{} };
+const state = { standings:{}, fixtures:{}, ownerMaps:{}, errors:[], notes:[], includeRP:true, reqCache:{},
+                tab:"home", tableLeague:LEAGUE_ORDER[0], weeks:[], matchWeek:0, matchPlayer:"all" };
 
 function seasonStrings() {
   const now = new Date();
@@ -352,15 +418,20 @@ function parseEspn(json) {
       rank: stats.rank ?? null,
       points: stats.points ?? 0,
       played: stats.gamesPlayed ?? 0,
+      w: stats.wins ?? null, d: stats.ties ?? null, l: stats.losses ?? null,
+      gd: stats.pointDifferential ?? ((stats.pointsFor != null && stats.pointsAgainst != null) ? stats.pointsFor - stats.pointsAgainst : null),
     };
   }).filter(r => r.rank != null).sort((a, b) => a.rank - b.rank);
 }
+
+function nint(x) { const v = parseInt(x, 10); return isNaN(v) ? null : v; }
 
 function parseTsdb(json) {
   return (json?.table || []).map(r => ({
     name: r.strTeam, logo: r.strBadge || null,
     rank: parseInt(r.intRank, 10), points: parseInt(r.intPoints, 10) || 0,
     played: parseInt(r.intPlayed, 10) || 0,
+    w: nint(r.intWin), d: nint(r.intDraw), l: nint(r.intLoss), gd: nint(r.intGoalDifference),
   })).sort((a, b) => a.rank - b.rank);
 }
 
@@ -382,13 +453,14 @@ function tableFromEvents(json) {
     if (!home || !away || isNaN(hs) || isNaN(as)) continue;   // not played yet
     home.played++; away.played++;
     home.gf += hs; home.ga += as; away.gf += as; away.ga += hs;
-    if (hs > as) home.points += 3;
-    else if (hs < as) away.points += 3;
-    else { home.points += 1; away.points += 1; }
+    if (hs > as) { home.points += 3; home.w = (home.w || 0) + 1; away.l = (away.l || 0) + 1; }
+    else if (hs < as) { away.points += 3; away.w = (away.w || 0) + 1; home.l = (home.l || 0) + 1; }
+    else { home.points += 1; away.points += 1; home.d = (home.d || 0) + 1; away.d = (away.d || 0) + 1; }
   }
   const rows = [...teams.values()]
     .sort((a, b) => b.points - a.points || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf || a.name.localeCompare(b.name))
-    .map((t, i) => ({ name: t.name, logo: t.logo, rank: i + 1, points: t.points, played: t.played }));
+    .map((t, i) => ({ name: t.name, logo: t.logo, rank: i + 1, points: t.points, played: t.played,
+                      w: t.w || 0, d: t.d || 0, l: t.l || 0, gd: t.gf - t.ga }));
   return rows;
 }
 
@@ -602,6 +674,146 @@ function render() {
   renderRules();
 }
 
+// --- League Tables tab -------------------------------------------
+function buildOwnerMap(lg) {
+  const rows = state.standings[lg] || [];
+  const map = new Map();                                   // standings row name -> player
+  for (const p of PLAYERS) {
+    const hit = matchTeam(rows, p.teams[lg]);
+    if (hit) map.set(hit.name, p);
+  }
+  return map;
+}
+
+function findOwner(lg, apiName) {
+  const map = state.ownerMaps?.[lg];
+  if (!map || !apiName) return null;
+  if (map.has(apiName)) return map.get(apiName);
+  const n = norm(apiName);
+  let best = null, bestDiff = Infinity;
+  for (const [rowName, p] of map) {
+    const rn = norm(rowName);
+    if (rn === n) return p;
+    if (rn.includes(n) || n.includes(rn)) {
+      const diff = Math.abs(rn.length - n.length);
+      if (diff < bestDiff) { bestDiff = diff; best = p; }
+    }
+  }
+  return best;
+}
+
+function ownerTag(p) {
+  const bg = accent(p);
+  const yiq = (c) => { const x = c.replace("#",""); return (parseInt(x.substr(0,2),16)*299 + parseInt(x.substr(2,2),16)*587 + parseInt(x.substr(4,2),16)*114) / 1000; };
+  const fg = yiq(bg) > 150 ? "#111" : "#fff";
+  return `<span class="owner-tag" style="background:${bg};color:${fg}">${esc(p.name)}</span>`;
+}
+
+function renderTables() {
+  const lg = state.tableLeague;
+  const rows = state.standings[lg];
+  const wrap = $("leagueTableWrap");
+  if (!rows) { wrap.innerHTML = `<div class="card"><div class="empty-note">No data loaded for ${esc(lg)} yet — try Refresh.</div></div>`; return; }
+  const r = LEAGUES[lg].rules;
+  const map = state.ownerMaps[lg];
+  const zoneOf = (rank) => {
+    if (r.qual && rank <= r.qual.spots) return "zone-qual";
+    if (r.promo && rank <= r.promo.spots) return "zone-promo";
+    if (r.releg && rank > rows.length - r.releg.spots) return "zone-releg";
+    return "";
+  };
+  const body = rows.map(t => {
+    const owner = map.get(t.name);
+    const crest = t.logo ? `<img class="crest" src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="crest placeholder"></span>`;
+    return `<tr class="${zoneOf(t.rank)}">
+      <td class="num dim">${t.rank}</td>
+      <td class="team">${crest}${esc(t.name)}${owner ? ownerTag(owner) : ""}</td>
+      <td class="num dim">${t.played ?? "—"}</td>
+      <td class="num dim">${t.w ?? "—"}</td>
+      <td class="num dim">${t.d ?? "—"}</td>
+      <td class="num dim">${t.l ?? "—"}</td>
+      <td class="num dim">${t.gd == null ? "—" : (t.gd > 0 ? "+" : "") + t.gd}</td>
+      <td class="num rowtotal">${t.points}</td>
+    </tr>`;
+  }).join("");
+  const legend = [];
+  if (r.qual) legend.push(`<span class="zl"><span class="sw" style="background:rgba(42,120,214,0.35)"></span>Europe (top ${r.qual.spots})</span>`);
+  if (r.promo) legend.push(`<span class="zl"><span class="sw" style="background:rgba(12,163,12,0.35)"></span>Promotion (top ${r.promo.spots})</span>`);
+  if (r.releg) legend.push(`<span class="zl"><span class="sw" style="background:rgba(211,59,59,0.4)"></span>Relegation (bottom ${r.releg.spots})</span>`);
+  wrap.innerHTML = `<div class="card"><div class="tbl-scroll"><table style="min-width:560px">
+    <thead><tr><th class="num">#</th><th>Team</th><th class="num">GP</th><th class="num">W</th>
+    <th class="num">D</th><th class="num">L</th><th class="num">GD</th><th class="num">Pts</th></tr></thead>
+    <tbody>${body}</tbody></table></div>
+    <div class="zone-legend">${legend.join("")}</div></div>`;
+}
+
+// --- Upcoming Matches tab ----------------------------------------
+function mondayOf(d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = (x.getDay() + 6) % 7;                        // Mon=0 … Sun=6
+  x.setDate(x.getDate() - day);
+  return x;
+}
+
+function buildWeeks() {
+  const weeks = [];
+  const start = mondayOf(new Date());
+  for (let i = 0; i < 5; i++) {
+    const s = new Date(start); s.setDate(s.getDate() + i * 7);
+    const e = new Date(s); e.setDate(e.getDate() + 7);     // exclusive end
+    const lastDay = new Date(+e - 86400000);
+    const md = (x) => x.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    weeks.push({ start: s, end: e, label: `${i === 0 ? "This week · " : i === 1 ? "Next week · " : ""}${md(s)} – ${md(lastDay)}` });
+  }
+  return weeks;
+}
+
+function renderMatches() {
+  const wk = state.weeks[state.matchWeek] || state.weeks[0];
+  const wrap = $("matchesWrap");
+  const items = [];
+  for (const lg of LEAGUE_ORDER) {
+    for (const f of (state.fixtures[lg] || [])) {
+      if (+f.date < +wk.start || +f.date >= +wk.end) continue;
+      const oh = findOwner(lg, f.home), oa = findOwner(lg, f.away);
+      if (!oh && !oa) continue;
+      const owners = [oh, oa].filter(Boolean);
+      if (state.matchPlayer !== "all" && !owners.some(p => p.name === state.matchPlayer)) continue;
+      items.push({ lg, f, oh, oa });
+    }
+  }
+  items.sort((a, b) => a.f.date - b.f.date);
+  if (!items.length) {
+    wrap.innerHTML = `<div class="card"><div class="empty-note">No matches for ${state.matchPlayer === "all" ? "anyone's teams" : state.matchPlayer + "'s teams"} that week${state.errors.length ? " (some leagues failed to load)" : ""}.</div></div>`;
+    return;
+  }
+  let html = "", lastDay = "";
+  for (const it of items) {
+    const dayKey = it.f.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+    if (dayKey !== lastDay) { html += `<div class="match-day">${dayKey}</div>`; lastDay = dayKey; }
+    const time = it.f.date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    const homeName = `${it.oh ? "<b>" : ""}${esc(it.f.home)}${it.oh ? "</b>" + ownerTag(it.oh) : ""}`;
+    const awayName = `${it.oa ? "<b>" : ""}${esc(it.f.away)}${it.oa ? "</b>" + ownerTag(it.oa) : ""}`;
+    html += `<div class="match-row">
+      <span class="mr-time">${time}</span>
+      <span class="mr-teams">${homeName} <span class="dim">vs</span> ${awayName}</span>
+      <span class="mr-league">${LEAGUES[it.lg].flag} ${esc(it.lg)}</span>
+    </div>`;
+  }
+  wrap.innerHTML = `<div class="card">${html}</div>`;
+}
+
+// --- Tabs ---------------------------------------------------------
+function showTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll("nav.tabs .tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  $("view-home").hidden = tab !== "home";
+  $("view-tables").hidden = tab !== "tables";
+  $("view-matches").hidden = tab !== "matches";
+  if (tab === "tables") renderTables();
+  if (tab === "matches") renderMatches();
+}
+
 function renderRules() {
   const parts = [];
   parts.push(`<p><b>Base score:</b> a team's current league points × its draft weight.</p>`);
@@ -646,10 +858,21 @@ async function loadAll() {
   msgs.push(...state.notes.map(n => `ℹ️ ${n}`));
   if (msgs.length) { $("banner").innerHTML = msgs.join("<br>"); $("banner").classList.add("show"); }
   $("updated").textContent = "Updated " + new Date().toLocaleString(undefined, { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
+  for (const lg of LEAGUE_ORDER) state.ownerMaps[lg] = buildOwnerMap(lg);
   render();
+  renderTables();
+  renderMatches();
 }
 
 $("seasonTag").textContent = SEASON.label + " season";
+$("leagueSelect").innerHTML = LEAGUE_ORDER.map(lg => `<option value="${esc(lg)}">${LEAGUES[lg].flag} ${esc(lg)}</option>`).join("");
+$("leagueSelect").addEventListener("change", (e) => { state.tableLeague = e.target.value; renderTables(); });
+state.weeks = buildWeeks();
+$("weekSelect").innerHTML = state.weeks.map((w, i) => `<option value="${i}">${esc(w.label)}</option>`).join("");
+$("weekSelect").addEventListener("change", (e) => { state.matchWeek = +e.target.value; renderMatches(); });
+$("playerSelect").innerHTML = `<option value="all">👥 Everyone</option>` + PLAYERS.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("");
+$("playerSelect").addEventListener("change", (e) => { state.matchPlayer = e.target.value; renderMatches(); });
+document.querySelectorAll("nav.tabs .tab").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 $("refreshBtn").addEventListener("click", loadAll);
 $("rpToggle").addEventListener("change", (e) => {
   state.includeRP = e.target.checked;
