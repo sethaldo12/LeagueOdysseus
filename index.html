@@ -305,7 +305,7 @@
           <span class="track" aria-hidden="true"></span>
           <span class="switch-label">Rewards &amp; penalties</span>
         </label>
-        <span class="switch-hint" id="switchHint">hidden — weighted points only</span>
+        <span class="switch-hint" id="switchHint">off — not counted</span>
       </div>
       <div class="toggle-row live-row">
         <label class="switch" title="Fold in-play scores into points and rankings as if they held">
@@ -313,7 +313,7 @@
           <span class="track" aria-hidden="true"></span>
           <span class="switch-label">Live scoring</span>
         </label>
-        <span class="switch-hint" id="liveHint">off — points update at full-time</span>
+        <span class="switch-hint" id="liveHint">off — counts at full-time</span>
       </div>
     </div>
     <section class="players" id="players"></section>
@@ -1233,12 +1233,12 @@ document.querySelectorAll("nav.tabs .tab").forEach(b => b.addEventListener("clic
 $("refreshBtn").addEventListener("click", loadAll);
 $("rpToggle").addEventListener("change", (e) => {
   state.includeRP = e.target.checked;
-  $("switchHint").textContent = state.includeRP ? "included in scores" : "hidden — weighted points only";
+  $("switchHint").textContent = state.includeRP ? "on — counted" : "off — not counted";
   render();
 });
 $("liveToggle").addEventListener("change", (e) => {
   state.useLive = e.target.checked;
-  $("liveHint").textContent = state.useLive ? "on — includes in-play scores" : "off — points update at full-time";
+  $("liveHint").textContent = state.useLive ? "on — in-play scores count" : "off — counts at full-time";
   updateBanner();
   render();
   renderTables();
