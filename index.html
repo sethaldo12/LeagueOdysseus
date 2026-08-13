@@ -226,8 +226,8 @@
   .match-day { font-size: 15px; text-transform: none; letter-spacing: -0.01em; color: var(--ink);
                font-weight: 750; padding: 15px 16px 7px; text-align: left; }
   .match-row { padding: 12px 12px; border-top: 1px solid var(--grid); }
-  .mr-grid { display: grid; grid-template-columns: 44px minmax(0,1fr) auto minmax(0,1fr); gap: 8px; align-items: center; }
-  .mr-status { text-align: center; }
+  .mr-grid { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 10px; align-items: center; }
+  .mr-bottom { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px; }
   .ms { display: inline-block; font-size: 10.5px; font-weight: 700; }
   .ms-ft { background: var(--chip-bg); color: var(--ink-2); border-radius: 10px; padding: 3px 9px; }
   .ms-live { background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); border-radius: 10px; padding: 3px 8px; animation: livePulse 2s ease-in-out infinite; }
@@ -243,7 +243,7 @@
   .tb-owner .owner-tag { margin-left: 0; }
   .mr-score { text-align: center; font-weight: 800; font-size: 15px; min-width: 48px; font-variant-numeric: tabular-nums; }
   .mr-score.live { color: var(--bad); }
-  .mr-lg { font-size: 10px; color: var(--muted); font-weight: 600; margin-top: 2px; white-space: nowrap; }
+  .mr-lg { font-size: 10.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
   .ft-text { color: var(--ink-2); font-weight: 700; background: var(--chip-bg); border-radius: 12px; padding: 2px 9px; }
   .match-row { cursor: pointer; }
   .match-row:hover { background: color-mix(in srgb, var(--chip-bg) 55%, transparent); }
@@ -1069,11 +1069,11 @@ function renderMatches() {
     const open = state.openMatch === it.key;
     html += `<div class="match-row ${open ? "open" : ""}" data-key="${esc(it.key)}">
       <div class="mr-grid">
-        <div class="mr-status">${status}</div>
         ${side(it.f.home, hr, it.oh, true)}
-        <div class="mr-score ${isLive ? "live" : ""}">${(isLive || isFT) ? `${it.f.hs} – ${it.f.as}` : "vs"}<div class="mr-lg">${LEAGUES[it.lg].flag} ${esc(it.lg)}</div></div>
+        <div class="mr-score ${isLive ? "live" : ""}">${(isLive || isFT) ? `${it.f.hs} – ${it.f.as}` : "vs"}</div>
         ${side(it.f.away, ar, it.oa, false)}
       </div>
+      <div class="mr-bottom">${status}<span class="mr-lg">${LEAGUES[it.lg].flag} ${esc(it.lg)}</span></div>
       ${open ? `<div class="match-detail" id="matchDetail"><div class="empty-note">Loading match details…</div></div>` : ""}
     </div>`;
   }
