@@ -58,9 +58,9 @@
   button.refresh:hover { border-color: var(--muted); }
   /* Rewards & penalties slider toggle */
   .togglebar {
-    display: flex; align-items: center; gap: 10px; margin: 0 2px 18px; flex-wrap: wrap;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 11px; margin: 0 2px 18px;
   }
-  .tb-sep { width: 1px; height: 20px; background: var(--grid); }
+  .toggle-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   label.switch { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; }
   label.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
   label.switch .track {
@@ -245,19 +245,22 @@
   <div id="view-home">
     <section class="tiles" id="tiles"></section>
     <div class="togglebar">
-      <label class="switch" title="Include live rewards & penalties in the scores">
-        <input type="checkbox" id="rpToggle">
-        <span class="track" aria-hidden="true"></span>
-        <span class="switch-label">Rewards &amp; penalties</span>
-      </label>
-      <span class="switch-hint" id="switchHint">hidden — weighted points only</span>
-      <span class="tb-sep" aria-hidden="true"></span>
-      <label class="switch" title="Fold in-play scores into points and rankings as if they held">
-        <input type="checkbox" id="liveToggle">
-        <span class="track" aria-hidden="true"></span>
-        <span class="switch-label">Live scoring</span>
-      </label>
-      <span class="switch-hint" id="liveHint">off — points update at full-time</span>
+      <div class="toggle-row">
+        <label class="switch" title="Include live rewards & penalties in the scores">
+          <input type="checkbox" id="rpToggle">
+          <span class="track" aria-hidden="true"></span>
+          <span class="switch-label">Rewards &amp; penalties</span>
+        </label>
+        <span class="switch-hint" id="switchHint">hidden — weighted points only</span>
+      </div>
+      <div class="toggle-row live-row">
+        <label class="switch" title="Fold in-play scores into points and rankings as if they held">
+          <input type="checkbox" id="liveToggle">
+          <span class="track" aria-hidden="true"></span>
+          <span class="switch-label">Live scoring</span>
+        </label>
+        <span class="switch-hint" id="liveHint">off — points update at full-time</span>
+      </div>
     </div>
     <section class="players" id="players"></section>
     <details class="rules">
