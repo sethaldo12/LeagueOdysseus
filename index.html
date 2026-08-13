@@ -50,6 +50,28 @@
     border: 1px solid var(--border); background: var(--surface); color: var(--ink); cursor: pointer;
   }
   button.refresh:hover { border-color: var(--muted); }
+  /* Rewards & penalties slider toggle */
+  .togglebar {
+    display: flex; align-items: center; gap: 10px; margin: 0 2px 18px;
+  }
+  label.switch { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; }
+  label.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  label.switch .track {
+    width: 40px; height: 23px; border-radius: 23px; background: var(--grid);
+    border: 1px solid var(--border); position: relative; flex: none;
+    transition: background 0.18s ease;
+  }
+  label.switch .track::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 17px; height: 17px;
+    border-radius: 50%; background: var(--surface);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    transition: transform 0.18s ease;
+  }
+  label.switch input:checked + .track { background: #0ca30c; }
+  label.switch input:checked + .track::after { transform: translateX(17px); }
+  label.switch input:focus-visible + .track { outline: 2px solid var(--muted); outline-offset: 2px; }
+  label.switch .switch-label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .switch-hint { font-size: 12.5px; color: var(--muted); }
 
   .banner {
     border: 1px solid var(--border); border-left: 4px solid #ec835a;
@@ -95,6 +117,13 @@
   tr:last-child td { border-bottom: none; }
   td.league { color: var(--ink-2); font-size: 12.5px; white-space: nowrap; }
   td.team { white-space: nowrap; }
+  /* anchored Team column: stays visible while the rest scrolls */
+  th.sticky, td.sticky {
+    position: sticky; left: 0; z-index: 2;
+    background: var(--surface);
+    box-shadow: inset -1px 0 0 var(--grid), 6px 0 8px -6px rgba(0,0,0,0.18);
+  }
+  tr.totals td.sticky { background: color-mix(in srgb, var(--chip-bg), var(--surface)); }
   .crest { width: 20px; height: 20px; object-fit: contain; vertical-align: -5px; margin-right: 7px; }
   .crest.placeholder { display: inline-block; background: var(--chip-bg); border-radius: 50%; }
   .pos-chip {
@@ -132,6 +161,14 @@
 
   <div class="banner" id="banner"></div>
   <section class="tiles" id="tiles"></section>
+  <div class="togglebar">
+    <label class="switch" title="Include live rewards & penalties in the scores">
+      <input type="checkbox" id="rpToggle" checked>
+      <span class="track" aria-hidden="true"></span>
+      <span class="switch-label">Rewards &amp; penalties</span>
+    </label>
+    <span class="switch-hint" id="switchHint">included in scores</span>
+  </div>
   <div class="loading" id="loading">Loading league tables…</div>
   <section class="players" id="players"></section>
 
@@ -233,7 +270,7 @@ const ALIASES = {
    APP — no need to edit below
    ================================================================ */
 const $ = (id) => document.getElementById(id);
-const state = { standings:{}, errors:[], notes:[] };
+const state = { standings:{}, errors:[], notes:[], includeRP:true };
 
 function seasonStrings() {
   const now = new Date();
@@ -422,16 +459,19 @@ function ordinal(n) {
 }
 
 function render() {
-  const results = PLAYERS.map(computePlayer).sort((a, b) => b.total - a.total);
-  const leader = results[0]?.total ?? 0;
+  const useRP = state.includeRP;
+  const results = PLAYERS.map(computePlayer)
+    .map(r => ({ ...r, shown: useRP ? r.total : r.weighted }))
+    .sort((a, b) => b.shown - a.shown);
+  const leader = results[0]?.shown ?? 0;
 
   $("tiles").innerHTML = results.map((r, i) => `
     <div class="tile" style="--accent:${accent(r.player)}">
       <div class="place">${MEDAL[i]} ${PLACE[i] || ordinal(i + 1)}</div>
       <div class="who"><span class="dot"></span>${esc(r.player.name)}</div>
-      <div class="pts">${fmt(r.total)}</div>
-      <div class="sub">base ${fmt(r.weighted)} · rew +${fmt(r.rewards)} · pen ${fmt(r.penalties)}</div>
-      <div class="behind">${i === 0 ? "leader" : "−" + fmt(leader - r.total) + " behind"}</div>
+      <div class="pts">${fmt(r.shown)}</div>
+      <div class="sub">${useRP ? `base ${fmt(r.weighted)} · rew +${fmt(r.rewards)} · pen ${fmt(r.penalties)}` : "weighted points only — rewards & penalties off"}</div>
+      <div class="behind">${i === 0 ? "leader" : "−" + fmt(leader - r.shown) + " behind"}</div>
     </div>`).join("");
 
   $("players").innerHTML = results.map(r => {
@@ -445,23 +485,25 @@ function render() {
       const minusTags = row.tags.filter(x => x.pts < 0).map(tag => `<span class="tag minus">${tag.label} ${tag.pts}</span>`).join("");
       const rewardSum  = row.tags.filter(x => x.pts >= 0).reduce((a, x) => a + x.pts, 0);
       const penaltySum = row.tags.filter(x => x.pts < 0).reduce((a, x) => a + x.pts, 0);
-      const rowTotal = row.weightedPts + rewardSum + penaltySum;
+      const rowTotal = useRP ? row.weightedPts + rewardSum + penaltySum : row.weightedPts;
+      const rpCells = useRP
+        ? `<td>${plusTags || '<span class="dim">—</span>'}</td>
+        <td>${minusTags || '<span class="dim">—</span>'}</td>` : "";
       return `<tr>
+        <td class="team sticky">${crest}${esc(row.teamName)}${t ? `<span class="pos-chip">${ordinal(t.rank)}</span>` : `<span class="pos-chip dim">no data</span>`}</td>
         <td class="league">${lgCfg.flag} ${esc(row.league)}</td>
-        <td class="team">${crest}${esc(row.teamName)}${t ? `<span class="pos-chip">${ordinal(t.rank)}</span>` : `<span class="pos-chip dim">no data</span>`}</td>
         <td class="num">${t ? fmt(t.points, 0) : "—"}</td>
         <td class="num dim">${t ? fmt(t.played, 0) : "—"}</td>
         <td class="num dim">${row.weight}%</td>
         <td class="num">${t ? fmt(row.weightedPts) : "—"}</td>
-        <td>${plusTags || '<span class="dim">—</span>'}</td>
-        <td>${minusTags || '<span class="dim">—</span>'}</td>
+        ${rpCells}
         <td class="num rowtotal">${t ? fmt(rowTotal) : "—"}</td>
       </tr>`;
     }).join("");
 
-    const adjRows = r.adjItems.map(a => `<tr>
+    const adjRows = !useRP ? "" : r.adjItems.map(a => `<tr>
+        <td class="team sticky">${esc(a.team || "")} <span class="dim">${esc(a.label)}</span></td>
         <td class="league">🎖 Bonus</td>
-        <td class="team">${esc(a.team || "")} <span class="dim">${esc(a.label)}</span></td>
         <td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>
         <td>${a.pts >= 0 ? `<span class="tag plus">+${a.pts}</span>` : '<span class="dim">—</span>'}</td>
         <td>${a.pts < 0 ? `<span class="tag minus">${a.pts}</span>` : '<span class="dim">—</span>'}</td>
@@ -470,19 +512,19 @@ function render() {
 
     return `<div class="card">
       <div class="head"><span class="dot" style="background:${accent(r.player)}"></span>
-        <h2>${esc(r.player.name)}</h2><span class="total">${fmt(r.total)} pts</span></div>
+        <h2>${esc(r.player.name)}</h2><span class="total">${fmt(r.shown)} pts</span></div>
       <div class="tbl-scroll"><table>
         <thead><tr>
-          <th>League</th><th>Team</th><th class="num">Lg pts</th><th class="num">GP</th>
-          <th class="num">Weight</th><th class="num">Weighted</th><th>Rewards</th><th>Penalties</th><th class="num">Total</th>
+          <th class="sticky">Team</th><th>League</th><th class="num">Lg pts</th><th class="num">GP</th>
+          <th class="num">Weight</th><th class="num">Weighted</th>${useRP ? "<th>Rewards</th><th>Penalties</th>" : ""}<th class="num">Total</th>
         </tr></thead>
         <tbody>${bodyRows}${adjRows}
           <tr class="totals">
-            <td></td><td>Total</td><td></td><td></td><td></td>
+            <td class="sticky">Total</td><td></td><td></td><td></td><td></td>
             <td class="num">${fmt(r.weighted)}</td>
-            <td><span class="tag plus">+${fmt(r.rewards)}</span></td>
-            <td><span class="tag minus">${fmt(r.penalties)}</span></td>
-            <td class="num">${fmt(r.total)}</td>
+            ${useRP ? `<td><span class="tag plus">+${fmt(r.rewards)}</span></td>
+            <td><span class="tag minus">${fmt(r.penalties)}</span></td>` : ""}
+            <td class="num">${fmt(r.shown)}</td>
           </tr>
         </tbody>
       </table></div>
@@ -528,6 +570,11 @@ async function loadAll() {
 
 $("seasonTag").textContent = SEASON.label + " season";
 $("refreshBtn").addEventListener("click", loadAll);
+$("rpToggle").addEventListener("change", (e) => {
+  state.includeRP = e.target.checked;
+  $("switchHint").textContent = state.includeRP ? "included in scores" : "hidden — weighted points only";
+  render();
+});
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 loadAll();
 </script>
