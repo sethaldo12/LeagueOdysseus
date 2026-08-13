@@ -172,6 +172,12 @@
   }
 
   /* League Tables tab */
+  .seg { display: inline-flex; background: var(--chip-bg); border-radius: 20px; padding: 3px; }
+  .seg button {
+    font: inherit; font-size: 12.5px; padding: 5px 18px; border: none; background: none;
+    color: var(--ink-2); border-radius: 16px; cursor: pointer;
+  }
+  .seg button.active { background: var(--surface); color: var(--ink); font-weight: 650; box-shadow: 0 1px 3px rgba(0,0,0,0.14); }
   .owner-tag {
     display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 5px;
     padding: 1px 7px; margin-left: 7px; text-transform: uppercase; letter-spacing: 0.04em;
@@ -326,6 +332,10 @@
   <div id="view-tables" hidden>
     <div class="controls">
       <select id="leagueSelect" aria-label="Choose league"></select>
+      <div class="seg" id="tableViewSeg" role="group" aria-label="Table detail">
+        <button data-view="short" class="active">Short</button>
+        <button data-view="full">Full</button>
+      </div>
     </div>
     <div id="leagueTableWrap"></div>
   </div>
@@ -482,7 +492,7 @@ const ALIASES = {
    ================================================================ */
 const $ = (id) => document.getElementById(id);
 const state = { standings:{}, fixtures:{}, ownerMaps:{}, errors:[], notes:[], includeRP:false, useLive:false, reqCache:{},
-                tab:"home", tableLeague:LEAGUE_ORDER[0], weeks:[], matchWeek:0, matchPlayer:"all",
+                tab:"home", tableLeague:LEAGUE_ORDER[0], tableView:"short", weeks:[], matchWeek:0, matchPlayer:"all",
                 openMatch:null, detailTab:"events", detailData:null, matchItems:[] };
 
 function seasonStrings() {
@@ -926,15 +936,24 @@ function renderTables() {
     contains.sort((a, b) => Math.abs(a.n.length - n.length) - Math.abs(b.n.length - n.length));
     return contains[0].v;
   };
+  const short = state.tableView === "short";
   const body = rows.map(t => {
     const owner = map.get(t.name);
     const weight = owner ? (WEIGHTS[`${lg}|${owner.teams[lg]}`] ?? 100) : weightFor(t.name);
     const crest = t.logo ? `<img class="crest" src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="crest placeholder"></span>`;
+    const teamCell = `<td class="team steam"><span class="trow">${crest}<span class="tname">${esc(t.name)}</span><span class="pos-chip">${ordinal(t.rank)}</span>${t.live ? `<span class="live-chip">⚽ ${esc(t.live.clock)} ${t.live.score}</span>` : ""}${owner ? ownerTag(owner) : ""}</span></td>`;
+    const wtd = weight != null ? fmt(t.points * weight / 100) : "—";
+    if (short) return `<tr class="${zoneOf(t.rank)}">
+      ${teamCell}
+      <td class="num rowtotal">${t.points}</td>
+      <td class="num">${wtd}</td>
+      <td class="num dim">${t.played ?? "—"}</td>
+    </tr>`;
     return `<tr class="${zoneOf(t.rank)}">
-      <td class="team steam"><span class="trow">${crest}<span class="tname">${esc(t.name)}</span><span class="pos-chip">${ordinal(t.rank)}</span>${t.live ? `<span class="live-chip">⚽ ${esc(t.live.clock)} ${t.live.score}</span>` : ""}${owner ? ownerTag(owner) : ""}</span></td>
+      ${teamCell}
       <td class="num rowtotal">${t.points}</td>
       <td class="num dim">${weight != null ? weight + "%" : "—"}</td>
-      <td class="num">${weight != null ? fmt(t.points * weight / 100) : "—"}</td>
+      <td class="num">${wtd}</td>
       <td class="num dim">${t.played ?? "—"}</td>
       <td class="num dim">${t.w ?? "—"}</td>
       <td class="num dim">${t.d ?? "—"}</td>
@@ -946,9 +965,12 @@ function renderTables() {
   if (r.qual) legend.push(`<span class="zl"><span class="sw" style="background:rgba(42,120,214,0.35)"></span>Europe (top ${r.qual.spots})</span>`);
   if (r.promo) legend.push(`<span class="zl"><span class="sw" style="background:rgba(12,163,12,0.35)"></span>Promotion (top ${r.promo.spots})</span>`);
   if (r.releg) legend.push(`<span class="zl"><span class="sw" style="background:rgba(211,59,59,0.4)"></span>Relegation (bottom ${r.releg.spots})</span>`);
-  wrap.innerHTML = `<div class="card"><div class="tbl-scroll"><table style="min-width:560px">
-    <thead><tr><th class="steam">Team</th><th class="num">Pts</th><th class="num">Weight</th><th class="num">Weighted</th><th class="num">GP</th><th class="num">W</th>
-    <th class="num">D</th><th class="num">L</th><th class="num">GD</th></tr></thead>
+  const head = short
+    ? `<th class="steam">Team</th><th class="num">Pts</th><th class="num">Weighted</th><th class="num">GP</th>`
+    : `<th class="steam">Team</th><th class="num">Pts</th><th class="num">Weight</th><th class="num">Weighted</th><th class="num">GP</th><th class="num">W</th>
+    <th class="num">D</th><th class="num">L</th><th class="num">GD</th>`;
+  wrap.innerHTML = `<div class="card"><div class="tbl-scroll"><table style="min-width:${short ? 320 : 560}px">
+    <thead><tr>${head}</tr></thead>
     <tbody>${body}</tbody></table></div>
     <div class="zone-legend">${legend.join("")}</div></div>`;
 }
@@ -1213,6 +1235,13 @@ async function loadAll() {
 $("seasonTag").textContent = SEASON.label + " season";
 $("leagueSelect").innerHTML = LEAGUE_ORDER.map(lg => `<option value="${esc(lg)}">${LEAGUES[lg].flag} ${esc(lg)}</option>`).join("");
 $("leagueSelect").addEventListener("change", (e) => { state.tableLeague = e.target.value; renderTables(); });
+$("tableViewSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  state.tableView = b.dataset.view;
+  document.querySelectorAll("#tableViewSeg button").forEach(x => x.classList.toggle("active", x === b));
+  renderTables();
+});
 state.weeks = buildWeeks();
 $("weekSelect").innerHTML = state.weeks.map((w, i) => `<option value="${i}">${esc(w.label)}</option>`).join("");
 $("weekSelect").addEventListener("change", (e) => { state.matchWeek = +e.target.value; renderMatches(); });
