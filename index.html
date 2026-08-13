@@ -311,6 +311,34 @@ function parseTsdb(json) {
   })).sort((a, b) => a.rank - b.rank);
 }
 
+// Build a league table from raw match results (used until the official table is published)
+function tableFromEvents(json) {
+  const events = json?.events || [];
+  const teams = new Map();
+  const ensure = (name, badge) => {
+    if (!name) return null;
+    if (!teams.has(name)) teams.set(name, { name, logo: badge || null, points: 0, played: 0, gf: 0, ga: 0 });
+    const t = teams.get(name);
+    if (!t.logo && badge) t.logo = badge;
+    return t;
+  };
+  for (const e of events) {
+    const home = ensure(e.strHomeTeam, e.strHomeTeamBadge);
+    const away = ensure(e.strAwayTeam, e.strAwayTeamBadge);
+    const hs = parseInt(e.intHomeScore, 10), as = parseInt(e.intAwayScore, 10);
+    if (!home || !away || isNaN(hs) || isNaN(as)) continue;   // not played yet
+    home.played++; away.played++;
+    home.gf += hs; home.ga += as; away.gf += as; away.ga += hs;
+    if (hs > as) home.points += 3;
+    else if (hs < as) away.points += 3;
+    else { home.points += 1; away.points += 1; }
+  }
+  const rows = [...teams.values()]
+    .sort((a, b) => b.points - a.points || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf || a.name.localeCompare(b.name))
+    .map((t, i) => ({ name: t.name, logo: t.logo, rank: i + 1, points: t.points, played: t.played }));
+  return rows;
+}
+
 async function loadLeague(key) {
   const cfg = LEAGUES[key];
   if (cfg.source.espn) {
@@ -319,12 +347,20 @@ async function loadLeague(key) {
     if (!rows.length) throw new Error("empty table");
     return rows;
   } else {
-    const base = `https://www.thesportsdb.com/api/v1/json/123/lookuptable.php?l=${cfg.source.tsdb}`;
+    const id = cfg.source.tsdb;
+    const tableUrl = (s) => `https://www.thesportsdb.com/api/v1/json/123/lookuptable.php?l=${id}&s=${s}`;
     let rows = [];
-    try { rows = parseTsdb(await fetchJSON(`${base}&s=${SEASON.tsdb}`)); } catch (e) { /* fall through */ }
+    try { rows = parseTsdb(await fetchJSON(tableUrl(SEASON.tsdb))); } catch (e) { /* fall through */ }
     if (!rows.length) {
-      rows = parseTsdb(await fetchJSON(`${base}&s=${SEASON.tsdbPrev}`));
-      if (rows.length) state.notes.push(`${key}: new season table not published yet — showing last season for now.`);
+      // no official table yet — compute standings from this season's match results
+      try {
+        rows = tableFromEvents(await fetchJSON(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${id}&s=${SEASON.tsdb}`));
+        if (rows.length) state.notes.push(`${key}: official table not published yet — standings computed live from match results.`);
+      } catch (e) { /* fall through */ }
+    }
+    if (!rows.length) {
+      rows = parseTsdb(await fetchJSON(tableUrl(SEASON.tsdbPrev)));
+      if (rows.length) state.notes.push(`${key}: new season data not available yet — showing last season for now.`);
     }
     if (!rows.length) throw new Error("empty table");
     return rows;
