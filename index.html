@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>League Odysseus</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:        #f9f9f7;
+    --surface:     #fcfcfb;
+    --ink:         #0b0b0b;
+    --ink-2:       #52514e;
+    --muted:       #898781;
+    --grid:        #e1e0d9;
+    --border:      rgba(11,11,11,0.10);
+    --good:        #006300;
+    --bad:         #b3282d;
+    --chip-bg:     rgba(11,11,11,0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:      #0d0d0d;
+      --surface:   #1a1a19;
+      --ink:       #ffffff;
+      --ink-2:     #c3c2b7;
+      --muted:     #898781;
+      --grid:      #2c2c2a;
+      --border:    rgba(255,255,255,0.10);
+      --good:      #0ca30c;
+      --bad:       #e66767;
+      --chip-bg:   rgba(255,255,255,0.07);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 20px 14px 60px; }
+
+  header.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin: 6px 2px 18px; }
+  h1 { font-size: 26px; margin: 0; letter-spacing: -0.02em; }
+  .season-tag { color: var(--ink-2); font-size: 14px; }
+  .meta { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12.5px; }
+  button.refresh {
+    font: inherit; font-size: 13px; padding: 6px 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink); cursor: pointer;
+  }
+  button.refresh:hover { border-color: var(--muted); }
+
+  .banner {
+    border: 1px solid var(--border); border-left: 4px solid #ec835a;
+    background: var(--surface); border-radius: 8px; padding: 10px 14px;
+    font-size: 13.5px; color: var(--ink-2); margin-bottom: 16px; display: none;
+  }
+  .banner.show { display: block; }
+
+  /* Leaderboard tiles */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 26px; }
+  @media (max-width: 760px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px 12px; position: relative; overflow: hidden;
+  }
+  .tile::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 5px; background: var(--accent, var(--muted)); }
+  .tile .place { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .tile .who { font-size: 16px; font-weight: 650; margin: 2px 0 6px; display: flex; align-items: center; gap: 7px; }
+  .tile .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent); border: 1px solid var(--border); flex: none; }
+  .tile .pts { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+  .tile .sub { font-size: 12px; color: var(--ink-2); margin-top: 5px; }
+  .tile .behind { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* Player cards */
+  .players { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .card > .head {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    border-bottom: 1px solid var(--grid);
+  }
+  .card > .head .dot { width: 13px; height: 13px; border-radius: 50%; border: 1px solid var(--border); flex: none; }
+  .card > .head h2 { font-size: 17px; margin: 0; }
+  .card > .head .total { margin-left: auto; font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tbl-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 680px; }
+  th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--grid);
+    white-space: nowrap;
+  }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  td.league { color: var(--ink-2); font-size: 12.5px; white-space: nowrap; }
+  td.team { white-space: nowrap; }
+  .crest { width: 20px; height: 20px; object-fit: contain; vertical-align: -5px; margin-right: 7px; }
+  .crest.placeholder { display: inline-block; background: var(--chip-bg); border-radius: 50%; }
+  .pos-chip {
+    display: inline-block; font-size: 11px; color: var(--ink-2); background: var(--chip-bg);
+    border-radius: 20px; padding: 1px 7px; margin-left: 7px; font-variant-numeric: tabular-nums;
+  }
+  .tag {
+    display: inline-block; font-size: 11px; border-radius: 6px; padding: 1px 6px; margin: 1px 2px 1px 0;
+    white-space: nowrap; background: var(--chip-bg);
+  }
+  .tag.plus  { color: var(--good); }
+  .tag.minus { color: var(--bad); }
+  td.rowtotal { font-weight: 650; }
+  tr.totals td { border-top: 2px solid var(--grid); font-weight: 700; background: color-mix(in srgb, var(--chip-bg) 60%, transparent); }
+  .dim { color: var(--muted); }
+
+  /* Rules footer */
+  details.rules { margin-top: 30px; color: var(--ink-2); font-size: 13.5px; }
+  details.rules summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+  details.rules .inner { padding: 10px 4px 0; line-height: 1.55; }
+  .loading { color: var(--muted); font-size: 14px; padding: 30px 10px; text-align: center; }
+  footer.pagefoot { margin-top: 28px; color: var(--muted); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>⚽ League Odysseus</h1>
+    <span class="season-tag" id="seasonTag"></span>
+    <div class="meta">
+      <span id="updated"></span>
+      <button class="refresh" id="refreshBtn">↻ Refresh</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+  <section class="tiles" id="tiles"></section>
+  <div class="loading" id="loading">Loading league tables…</div>
+  <section class="players" id="players"></section>
+
+  <details class="rules">
+    <summary>Scoring rules</summary>
+    <div class="inner" id="rulesText"></div>
+  </details>
+
+  <footer class="pagefoot">
+    Base score = league points × team weight. Rewards & penalties update live with the tables.<br>
+    Data: ESPN & TheSportsDB · Built for the boys 🍻
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ================================================================
+   LEAGUE ODYSSEUS — CONFIG
+   Everything you'd ever want to tweak lives in this block.
+   ================================================================ */
+
+// --- League definitions -----------------------------------------
+// source: {espn:"slug"} or {tsdb:"leagueId"}
+// rules:
+//   title:      points for 1st place (live)
+//   titleGiant: if 1st place is one of these clubs, title pts drop to titleGiantPts
+//   qual:       {spots, pts}   European qualification (top-flight leagues)
+//   promo:      {spots, pts}   promotion (second divisions)
+//   releg:      {spots, pts}   bottom-N relegation penalty
+const LEAGUES = {
+  "Prem":            { flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", source:{espn:"eng.1"}, rules:{ title:10, qual:{spots:6, pts:5},  releg:{spots:3, pts:-10} } },
+  "Champ":           { flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", source:{espn:"eng.2"}, rules:{ title:5,  promo:{spots:3, pts:5}, releg:{spots:3, pts:-10} } },
+  "Serie A":         { flag:"🇮🇹", source:{espn:"ita.1"}, rules:{ title:10, qual:{spots:4, pts:5},  releg:{spots:3, pts:-10} } },
+  "Serie B":         { flag:"🇮🇹", source:{espn:"ita.2"}, rules:{ title:5,  promo:{spots:3, pts:5}, releg:{spots:3, pts:-10} } },
+  "La Liga":         { flag:"🇪🇸", source:{espn:"esp.1"}, rules:{ title:10, titleGiant:["Barcelona","Real Madrid"], titleGiantPts:5,
+                                                                  qual:{spots:4, pts:5},  releg:{spots:3, pts:-10} } },
+  "La Liga 2":       { flag:"🇪🇸", source:{espn:"esp.2"}, rules:{ title:5,  promo:{spots:3, pts:5}, releg:{spots:4, pts:-10} } },
+  "Bundesliga":      { flag:"🇩🇪", source:{espn:"ger.1"}, rules:{ title:10, titleGiant:["Bayern Munich"], titleGiantPts:5,
+                                                                  qual:{spots:4, pts:5},  releg:{spots:3, pts:-10} } },
+  "2. Bundesliga":   { flag:"🇩🇪", source:{espn:"ger.2"}, rules:{ title:5,  promo:{spots:3, pts:5}, releg:{spots:2, pts:-10} } },
+  "Ligue 1":         { flag:"🇫🇷", source:{espn:"fra.1"}, rules:{ title:10, titleGiant:["Paris Saint-Germain"], titleGiantPts:5,
+                                                                  qual:{spots:4, pts:5},  releg:{spots:2, pts:-10} } },
+  "Ligue 2":         { flag:"🇫🇷", source:{espn:"fra.2"}, rules:{ title:5,  promo:{spots:2, pts:5}, releg:{spots:2, pts:-10} } },
+  "Liga Portugal":   { flag:"🇵🇹", source:{espn:"por.1"}, rules:{ title:10, qual:{spots:4, pts:5},  releg:{spots:2, pts:-10} } },
+  "Liga Portugal 2": { flag:"🇵🇹", source:{tsdb:"4662"},  rules:{ title:5,  promo:{spots:2, pts:5}, releg:{spots:2, pts:-10} } },
+};
+const LEAGUE_ORDER = Object.keys(LEAGUES);
+
+// --- The roster --------------------------------------------------
+// weight is the % from the draft sheet (points × weight = actual points)
+const PLAYERS = [
+  { name:"Max", color:"#2a78d6", darkColor:"#3987e5", teams:{
+      "Prem":"Liverpool", "Champ":"West Bromwich Albion", "Serie A":"Juventus", "Serie B":"Palermo",
+      "La Liga":"Sevilla", "La Liga 2":"Cádiz", "Bundesliga":"Bayer Leverkusen", "2. Bundesliga":"1. FC Nürnberg",
+      "Ligue 1":"Nice", "Ligue 2":"Dunkerque", "Liga Portugal":"Porto", "Liga Portugal 2":"Farense" } },
+  { name:"Seth", color:"#b3282d", darkColor:"#e05a5f", teams:{
+      "Prem":"Chelsea", "Champ":"Wrexham", "Serie A":"Atalanta", "Serie B":"Empoli",
+      "La Liga":"Real Madrid", "La Liga 2":"Almería", "Bundesliga":"Bayern Munich", "2. Bundesliga":"Hannover 96",
+      "Ligue 1":"Strasbourg", "Ligue 2":"Reims", "Liga Portugal":"Sporting CP", "Liga Portugal 2":"Portimonense" } },
+  { name:"Jim", color:"#3f3f3c", darkColor:"#d8d7cf", teams:{
+      "Prem":"Brighton & Hove Albion", "Champ":"Middlesbrough", "Serie A":"Roma", "Serie B":"Benevento",
+      "La Liga":"Barcelona", "La Liga 2":"Albacete", "Bundesliga":"RB Leipzig", "2. Bundesliga":"Eintracht Braunschweig",
+      "Ligue 1":"Paris Saint-Germain", "Ligue 2":"Saint-Étienne", "Liga Portugal":"Benfica", "Liga Portugal 2":"Penafiel" } },
+  { name:"Brayden", color:"#c98500", darkColor:"#eda100", teams:{
+      "Prem":"Tottenham Hotspur", "Champ":"Swansea City", "Serie A":"AC Milan", "Serie B":"Sampdoria",
+      "La Liga":"Atlético Madrid", "La Liga 2":"Burgos", "Bundesliga":"Borussia Dortmund", "2. Bundesliga":"1. FC Kaiserslautern",
+      "Ligue 1":"Lyon", "Ligue 2":"Clermont", "Liga Portugal":"Santa Clara", "Liga Portugal 2":"Lusitânia Lourosa" } },
+];
+
+// Weights from the draft sheet (percent). Key: "League|Team".
+const WEIGHTS = {
+  "Prem|Liverpool":58, "Prem|Chelsea":73, "Prem|Brighton & Hove Albion":67, "Prem|Tottenham Hotspur":100,
+  "Champ|West Bromwich Albion":108, "Champ|Wrexham":64, "Champ|Middlesbrough":58, "Champ|Swansea City":77,
+  "Serie A|Juventus":61, "Serie A|Atalanta":64, "Serie A|Roma":52, "Serie A|AC Milan":58,
+  "Serie B|Palermo":56, "Serie B|Empoli":93, "Serie B|Benevento":104, "Serie B|Sampdoria":85,
+  "La Liga|Sevilla":95, "La Liga|Real Madrid":38, "La Liga|Barcelona":35, "La Liga|Atlético Madrid":50,
+  "La Liga 2|Cádiz":100, "La Liga 2|Almería":54, "La Liga 2|Albacete":79, "La Liga 2|Burgos":64,
+  "Bundesliga|Bayer Leverkusen":62, "Bundesliga|Bayern Munich":30, "Bundesliga|RB Leipzig":48, "Bundesliga|Borussia Dortmund":45,
+  "2. Bundesliga|1. FC Nürnberg":67, "2. Bundesliga|Hannover 96":56, "2. Bundesliga|Eintracht Braunschweig":94, "2. Bundesliga|1. FC Kaiserslautern":61,
+  "Ligue 1|Nice":100, "Ligue 1|Strasbourg":70, "Ligue 1|Paris Saint-Germain":30, "Ligue 1|Lyon":54,
+  "Ligue 2|Dunkerque":74, "Ligue 2|Reims":61, "Ligue 2|Saint-Étienne":54, "Ligue 2|Clermont":86,
+  "Liga Portugal|Porto":45, "Liga Portugal|Sporting CP":48, "Liga Portugal|Benfica":52, "Liga Portugal|Santa Clara":85,
+  "Liga Portugal 2|Farense":100, "Liga Portugal 2|Portimonense":94, "Liga Portugal 2|Penafiel":90, "Liga Portugal 2|Lusitânia Lourosa":82,
+};
+
+// --- End-of-season manual bonuses (cups, European runs) ----------
+// Add entries like: { player:"Seth", team:"Real Madrid", label:"Copa del Rey", pts:5 }
+const MANUAL_ADJUSTMENTS = [
+];
+
+// Extra name aliases for matching API team names (normalized both sides).
+const ALIASES = {
+  "psg":"paris saint germain",
+  "sporting lisbon":"sporting cp",
+  "inter":"internazionale",
+};
+
+/* ================================================================
+   APP — no need to edit below
+   ================================================================ */
+const $ = (id) => document.getElementById(id);
+const state = { standings:{}, errors:[], notes:[] };
+
+function seasonStrings() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const startYear = (now.getMonth() + 1) >= 7 ? y : y - 1;   // seasons roll over in July
+  return {
+    label: `${startYear}–${String(startYear + 1).slice(2)}`,
+    tsdb: `${startYear}-${startYear + 1}`,
+    tsdbPrev: `${startYear - 1}-${startYear}`,
+  };
+}
+const SEASON = seasonStrings();
+
+function norm(s) {
+  let t = (s || "").toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\b(fc|afc|cf|ac|ssc|ss|us|usl|sc|cd|ud|rcd|rc|as|ogc|sco|stade|de|club|deportivo|1|calcio)\b/g, " ")
+    .replace(/\s+/g, " ").trim();
+  return ALIASES[t] || t;
+}
+
+function matchTeam(rows, cfgName) {
+  const target = norm(cfgName);
+  let hit = rows.find(r => norm(r.name) === target);
+  if (hit) return hit;
+  const contains = rows.filter(r => {
+    const n = norm(r.name);
+    return n.includes(target) || target.includes(n);
+  });
+  if (contains.length) {
+    // prefer the closest-length name (avoids "Milan" matching "Inter Milan")
+    contains.sort((a, b) => Math.abs(norm(a.name).length - target.length) - Math.abs(norm(b.name).length - target.length));
+    return contains[0];
+  }
+  // token-overlap fallback
+  const tt = new Set(target.split(" "));
+  let best = null, bestScore = 0;
+  for (const r of rows) {
+    const toks = norm(r.name).split(" ");
+    const score = toks.filter(x => tt.has(x)).length;
+    if (score > bestScore) { bestScore = score; best = r; }
+  }
+  return bestScore > 0 ? best : null;
+}
+
+async function fetchJSON(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+function parseEspn(json) {
+  const entries = json?.children?.[0]?.standings?.entries || json?.standings?.entries || [];
+  return entries.map(e => {
+    const stats = {};
+    for (const s of (e.stats || [])) stats[s.name] = (s.value !== undefined ? s.value : parseFloat(s.displayValue));
+    return {
+      name: e.team?.displayName || e.team?.name || "?",
+      logo: e.team?.logos?.[0]?.href || null,
+      rank: stats.rank ?? null,
+      points: stats.points ?? 0,
+      played: stats.gamesPlayed ?? 0,
+    };
+  }).filter(r => r.rank != null).sort((a, b) => a.rank - b.rank);
+}
+
+function parseTsdb(json) {
+  return (json?.table || []).map(r => ({
+    name: r.strTeam, logo: r.strBadge || null,
+    rank: parseInt(r.intRank, 10), points: parseInt(r.intPoints, 10) || 0,
+    played: parseInt(r.intPlayed, 10) || 0,
+  })).sort((a, b) => a.rank - b.rank);
+}
+
+async function loadLeague(key) {
+  const cfg = LEAGUES[key];
+  if (cfg.source.espn) {
+    const json = await fetchJSON(`https://site.api.espn.com/apis/v2/sports/soccer/${cfg.source.espn}/standings`);
+    const rows = parseEspn(json);
+    if (!rows.length) throw new Error("empty table");
+    return rows;
+  } else {
+    const base = `https://www.thesportsdb.com/api/v1/json/123/lookuptable.php?l=${cfg.source.tsdb}`;
+    let json = await fetchJSON(`${base}&s=${SEASON.tsdb}`);
+    let rows = parseTsdb(json);
+    if (!rows.length) {
+      json = await fetchJSON(`${base}&s=${SEASON.tsdbPrev}`);
+      rows = parseTsdb(json);
+      if (rows.length) state.notes.push(`${key}: new season table not published yet — showing last season for now.`);
+    }
+    if (!rows.length) throw new Error("empty table");
+    return rows;
+  }
+}
+
+// --- Scoring -----------------------------------------------------
+function liveRewards(leagueKey, row, tableSize) {
+  const r = LEAGUES[leagueKey].rules;
+  const out = [];   // {label, pts}
+  if (row.rank === 1) {
+    let pts = r.title;
+    if (r.titleGiant && r.titleGiant.some(g => norm(g) === norm(row.name))) pts = r.titleGiantPts;
+    out.push({ label: "🏆 Title", pts });
+  }
+  if (r.qual && row.rank <= r.qual.spots) out.push({ label: "⭐ Europe", pts: r.qual.pts });
+  if (r.promo && row.rank <= r.promo.spots) out.push({ label: "⬆ Promotion", pts: r.promo.pts });
+  if (r.releg && row.rank > tableSize - r.releg.spots) out.push({ label: "⬇ Relegation", pts: r.releg.pts });
+  return out;
+}
+
+function computePlayer(p) {
+  const rows = [];
+  let weighted = 0, rewards = 0, penalties = 0;
+  for (const lg of LEAGUE_ORDER) {
+    const teamName = p.teams[lg];
+    const weight = WEIGHTS[`${lg}|${teamName}`] ?? 100;
+    const table = state.standings[lg];
+    let row = null, tags = [], w = 0;
+    if (table) {
+      row = matchTeam(table, teamName);
+      if (row) {
+        w = row.points * (weight / 100);
+        weighted += w;
+        tags = liveRewards(lg, row, table.length);
+        for (const t of tags) { if (t.pts >= 0) rewards += t.pts; else penalties += t.pts; }
+      }
+    }
+    rows.push({ league: lg, teamName, weight, row, tags, weightedPts: w });
+  }
+  let adj = 0;
+  const adjItems = MANUAL_ADJUSTMENTS.filter(a => a.player === p.name);
+  for (const a of adjItems) { adj += a.pts; if (a.pts >= 0) rewards += a.pts; else penalties += a.pts; }
+  return { player: p, rows, weighted, rewards, penalties, adjItems,
+           total: weighted + rewards + penalties };
+}
+
+// --- Rendering ---------------------------------------------------
+const fmt = (n, d = 2) => (Math.round(n * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: d });
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+const isDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
+const accent = (p) => isDark() && p.darkColor ? p.darkColor : p.color;
+const PLACE = ["1st", "2nd", "3rd", "4th"];
+const MEDAL = ["🥇", "🥈", "🥉", ""];
+
+function ordinal(n) {
+  const s = ["th","st","nd","rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function render() {
+  const results = PLAYERS.map(computePlayer).sort((a, b) => b.total - a.total);
+  const leader = results[0]?.total ?? 0;
+
+  $("tiles").innerHTML = results.map((r, i) => `
+    <div class="tile" style="--accent:${accent(r.player)}">
+      <div class="place">${MEDAL[i]} ${PLACE[i] || ordinal(i + 1)}</div>
+      <div class="who"><span class="dot"></span>${esc(r.player.name)}</div>
+      <div class="pts">${fmt(r.total)}</div>
+      <div class="sub">base ${fmt(r.weighted)} · rew +${fmt(r.rewards)} · pen ${fmt(r.penalties)}</div>
+      <div class="behind">${i === 0 ? "leader" : "−" + fmt(leader - r.total) + " behind"}</div>
+    </div>`).join("");
+
+  $("players").innerHTML = results.map(r => {
+    const bodyRows = r.rows.map(row => {
+      const lgCfg = LEAGUES[row.league];
+      const t = row.row;
+      const crest = t?.logo
+        ? `<img class="crest" src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`
+        : `<span class="crest placeholder"></span>`;
+      const plusTags  = row.tags.filter(x => x.pts >= 0).map(tag => `<span class="tag plus">${tag.label} +${tag.pts}</span>`).join("");
+      const minusTags = row.tags.filter(x => x.pts < 0).map(tag => `<span class="tag minus">${tag.label} ${tag.pts}</span>`).join("");
+      const rewardSum  = row.tags.filter(x => x.pts >= 0).reduce((a, x) => a + x.pts, 0);
+      const penaltySum = row.tags.filter(x => x.pts < 0).reduce((a, x) => a + x.pts, 0);
+      const rowTotal = row.weightedPts + rewardSum + penaltySum;
+      return `<tr>
+        <td class="league">${lgCfg.flag} ${esc(row.league)}</td>
+        <td class="team">${crest}${esc(row.teamName)}${t ? `<span class="pos-chip">${ordinal(t.rank)}</span>` : `<span class="pos-chip dim">no data</span>`}</td>
+        <td class="num">${t ? fmt(t.points, 0) : "—"}</td>
+        <td class="num dim">${t ? fmt(t.played, 0) : "—"}</td>
+        <td class="num dim">${row.weight}%</td>
+        <td class="num">${t ? fmt(row.weightedPts) : "—"}</td>
+        <td>${plusTags || '<span class="dim">—</span>'}</td>
+        <td>${minusTags || '<span class="dim">—</span>'}</td>
+        <td class="num rowtotal">${t ? fmt(rowTotal) : "—"}</td>
+      </tr>`;
+    }).join("");
+
+    const adjRows = r.adjItems.map(a => `<tr>
+        <td class="league">🎖 Bonus</td>
+        <td class="team">${esc(a.team || "")} <span class="dim">${esc(a.label)}</span></td>
+        <td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>
+        <td>${a.pts >= 0 ? `<span class="tag plus">+${a.pts}</span>` : '<span class="dim">—</span>'}</td>
+        <td>${a.pts < 0 ? `<span class="tag minus">${a.pts}</span>` : '<span class="dim">—</span>'}</td>
+        <td class="num rowtotal">${fmt(a.pts)}</td>
+      </tr>`).join("");
+
+    return `<div class="card">
+      <div class="head"><span class="dot" style="background:${accent(r.player)}"></span>
+        <h2>${esc(r.player.name)}</h2><span class="total">${fmt(r.total)} pts</span></div>
+      <div class="tbl-scroll"><table>
+        <thead><tr>
+          <th>League</th><th>Team</th><th class="num">Lg pts</th><th class="num">GP</th>
+          <th class="num">Weight</th><th class="num">Weighted</th><th>Rewards</th><th>Penalties</th><th class="num">Total</th>
+        </tr></thead>
+        <tbody>${bodyRows}${adjRows}
+          <tr class="totals">
+            <td></td><td>Total</td><td></td><td></td><td></td>
+            <td class="num">${fmt(r.weighted)}</td>
+            <td><span class="tag plus">+${fmt(r.rewards)}</span></td>
+            <td><span class="tag minus">${fmt(r.penalties)}</span></td>
+            <td class="num">${fmt(r.total)}</td>
+          </tr>
+        </tbody>
+      </table></div>
+    </div>`;
+  }).join("");
+
+  renderRules();
+}
+
+function renderRules() {
+  const parts = [];
+  parts.push(`<p><b>Base score:</b> a team's current league points × its draft weight.</p>`);
+  const lines = LEAGUE_ORDER.map(lg => {
+    const r = LEAGUES[lg].rules;
+    const bits = [];
+    bits.push(`title ${r.title > 0 ? "+" : ""}${r.title}${r.titleGiant ? ` (only +${r.titleGiantPts} if ${r.titleGiant.join("/")} win)` : ""}`);
+    if (r.qual) bits.push(`top ${r.qual.spots} (Europe) +${r.qual.pts}`);
+    if (r.promo) bits.push(`top ${r.promo.spots} (promotion) +${r.promo.pts}`);
+    if (r.releg) bits.push(`bottom ${r.releg.spots} (relegation) ${r.releg.pts}`);
+    return `<b>${lg}:</b> ${bits.join(" · ")}`;
+  });
+  parts.push(`<p>${lines.join("<br>")}</p>`);
+  parts.push(`<p>Rewards and penalties are <b>live</b> — they reflect where teams sit right now and change as the tables change. End-of-season cup and European bonuses get added manually.</p>`);
+  $("rulesText").innerHTML = parts.join("");
+}
+
+async function loadAll() {
+  $("loading").style.display = "block";
+  $("banner").classList.remove("show");
+  state.errors = []; state.notes = [];
+  await Promise.all(LEAGUE_ORDER.map(async (key) => {
+    try { state.standings[key] = await loadLeague(key); }
+    catch (e) { state.errors.push(`${key} (${e.message})`); state.standings[key] = state.standings[key] || null; }
+  }));
+  $("loading").style.display = "none";
+  const msgs = [];
+  if (state.errors.length) msgs.push(`⚠️ Couldn't load: ${state.errors.join(", ")} — scores shown without those leagues. Try refresh.`);
+  msgs.push(...state.notes.map(n => `ℹ️ ${n}`));
+  if (msgs.length) { $("banner").innerHTML = msgs.join("<br>"); $("banner").classList.add("show"); }
+  $("updated").textContent = "Updated " + new Date().toLocaleString(undefined, { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
+  render();
+}
+
+$("seasonTag").textContent = SEASON.label + " season";
+$("refreshBtn").addEventListener("click", loadAll);
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+loadAll();
+</script>
+</body>
+</html>
