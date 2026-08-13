@@ -1259,7 +1259,10 @@ $("matchesWrap").addEventListener("click", (e) => {
   renderMatches();
 });
 document.querySelectorAll("nav.tabs .tab").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
-$("refreshBtn").addEventListener("click", loadAll);
+// Hard reload: bypasses every cache (page + data), so it also picks up new app versions
+$("refreshBtn").addEventListener("click", () => {
+  location.href = location.pathname + "?v=" + Date.now();
+});
 $("rpToggle").addEventListener("change", (e) => {
   state.includeRP = e.target.checked;
   $("switchHint").textContent = state.includeRP ? "on — counted" : "off — not counted";
