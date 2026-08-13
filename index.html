@@ -177,7 +177,14 @@
   tr.zone-releg  td { background: rgba(211,59,59,0.07); }
   /* anchored Team column on the League Tables tab (Pts scrolls with the rest) */
   .steam { position: sticky; left: 0; z-index: 2; background: var(--surface);
-           box-shadow: inset -1px 0 0 var(--grid), 6px 0 8px -6px rgba(0,0,0,0.18); }
+           box-shadow: inset -1px 0 0 var(--grid), 6px 0 8px -6px rgba(0,0,0,0.18);
+           width: 1%;   /* shrink to content so the scrolling columns get the space */
+  }
+  .steam .trow { display: flex; align-items: center; min-width: 0; max-width: 240px; }
+  .steam .trow .crest { flex: none; }
+  .steam .tname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
+  .steam .pos-chip, .steam .owner-tag { flex: none; }
+  @media (max-width: 760px) { .steam .trow { max-width: calc(44vw - 20px); } }
   tr.zone-qual  .steam { background: linear-gradient(rgba(42,120,214,0.06), rgba(42,120,214,0.06)), var(--surface); }
   tr.zone-promo .steam { background: linear-gradient(rgba(12,163,12,0.06), rgba(12,163,12,0.06)), var(--surface); }
   tr.zone-releg .steam { background: linear-gradient(rgba(211,59,59,0.07), rgba(211,59,59,0.07)), var(--surface); }
@@ -739,7 +746,7 @@ function renderTables() {
     const owner = map.get(t.name);
     const crest = t.logo ? `<img class="crest" src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="crest placeholder"></span>`;
     return `<tr class="${zoneOf(t.rank)}">
-      <td class="team steam">${crest}${esc(t.name)}<span class="pos-chip">${ordinal(t.rank)}</span>${owner ? ownerTag(owner) : ""}</td>
+      <td class="team steam"><span class="trow">${crest}<span class="tname">${esc(t.name)}</span><span class="pos-chip">${ordinal(t.rank)}</span>${owner ? ownerTag(owner) : ""}</span></td>
       <td class="num rowtotal">${t.points}</td>
       <td class="num dim">${t.played ?? "—"}</td>
       <td class="num dim">${t.w ?? "—"}</td>
