@@ -381,6 +381,39 @@
   .prof-name .pbadges { font-size: 15px; }
   /* League tab manager cards */
   .togglebar.tg-inline { margin: 2px 2px 16px; }
+
+  /* News tab */
+  .nw-hero { overflow: hidden; margin-bottom: 14px; cursor: pointer; }
+  .nw-hero:hover { background: var(--surface-2); }
+  .nw-hero-img { aspect-ratio: 16 / 9; overflow: hidden; background: var(--chip-bg); }
+  .nw-hero-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .nw-hero-body { padding: 13px 16px 15px; }
+  .nw-hero-head { margin: 7px 0 6px; font-size: 18px; line-height: 1.3; letter-spacing: -0.01em; }
+  .nw-hero-desc { margin: 0; color: var(--ink-2); font-size: 13.5px; line-height: 1.45; }
+  .nw-meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .nw-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--chip-bg);
+             border-radius: 12px; padding: 2.5px 9px; font-size: 11px; font-weight: 700; color: var(--ink-2); }
+  .nw-chip .dot { width: 7px; height: 7px; }
+  .nw-time { color: var(--muted); font-size: 11.5px; margin-left: auto; white-space: nowrap; }
+  .nw-list { padding: 4px 0; }
+  .nw-row { display: flex; gap: 12px; padding: 11px 14px; cursor: pointer; align-items: center;
+            border-top: 1px solid var(--grid); }
+  .nw-row:first-child { border-top: none; }
+  .nw-row:hover { background: var(--surface-2); }
+  .nw-thumb { width: 74px; height: 54px; border-radius: 10px; object-fit: cover; flex: none; }
+  .nw-thumb-ph { display: grid; place-items: center; background: var(--chip-bg); font-size: 20px; }
+  .nw-row-body { min-width: 0; flex: 1; }
+  .nw-row-head { font-weight: 700; font-size: 13.5px; line-height: 1.35; margin-bottom: 5px; }
+  .nw-article-body { padding: 14px 16px 18px; }
+  .nw-article-body p { font-size: 14.5px; line-height: 1.6; color: var(--ink); margin: 0 0 12px; }
+  .nw-article-body h4 { font-size: 15px; margin: 18px 0 8px; }
+  .nw-li { margin-bottom: 6px !important; }
+  .nw-quote { margin: 16px 0; padding: 10px 16px; border-left: 3px solid #b8912b;
+              font-size: 16px; line-height: 1.5; font-weight: 650; color: var(--ink);
+              background: color-mix(in srgb, var(--chip-bg) 55%, transparent); border-radius: 0 12px 12px 0; }
+  .nw-out { display: inline-block; margin-top: 6px; font-weight: 700; color: #00a35c;
+            text-decoration: none; background: var(--chip-bg); border-radius: 18px; padding: 8px 16px; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .nw-quote { border-left-color: #d4af37; } }
   .lg-card { display: flex; align-items: center; gap: 12px; padding: 15px 16px; margin-bottom: 12px; cursor: pointer; }
   .lg-card:hover { background: var(--surface-2); }
   .lg-rank { color: var(--muted); font-weight: 700; font-size: 13px; width: 26px; flex: none; font-variant-numeric: tabular-nums; }
@@ -535,11 +568,11 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M12 8.1 8.5 10.6l1.35 4.1h4.3l1.35-4.1z" fill="currentColor"/><path d="M12 3.6v4.5M8.5 10.6 4.2 9.3M9.85 14.7l-2.6 3.5M14.15 14.7l2.6 3.5M15.5 10.6l4.3-1.3" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
       <span>Matches</span></button>
     <button class="tab" data-tab="tables" role="tab">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7 2.6h10A2.4 2.4 0 0 1 19.4 5v14a2.4 2.4 0 0 1-2.4 2.4H7A2.4 2.4 0 0 1 4.6 19V5A2.4 2.4 0 0 1 7 2.6zm.4 4.2h9.2v1.7H7.4zm0 4h9.2v1.7H7.4zm0 4h5.8v1.7H7.4z" fill="currentColor"/></svg>
-      <span>Tables</span></button>
-    <button class="tab" data-tab="teams" role="tab">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.8 2.6 5.8 6.3.6-4.8 4.2 1.4 6.2L12 16.4l-5.5 3.2 1.4-6.2-4.8-4.2 6.3-.6z" fill="currentColor"/></svg>
-      <span>Teams</span></button>
+      <span>Tables</span></button>
+    <button class="tab" data-tab="news" role="tab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7 2.6h10A2.4 2.4 0 0 1 19.4 5v14a2.4 2.4 0 0 1-2.4 2.4H7A2.4 2.4 0 0 1 4.6 19V5A2.4 2.4 0 0 1 7 2.6zm.4 4.2h9.2v3.9H7.4zm0 6.2h9.2v1.7H7.4zm0 4h5.8v1.7H7.4z" fill="currentColor"/></svg>
+      <span>News</span></button>
   </nav>
 
   <div class="loading" id="loading">Loading league tables…</div>
@@ -569,6 +602,13 @@
 
   <div id="view-league" hidden>
     <section id="leagueWrap"></section>
+  </div>
+
+  <div id="view-news" hidden>
+    <div class="controls">
+      <select id="newsPlayerSelect" aria-label="Filter news"></select>
+    </div>
+    <section id="newsWrap"><div class="loading" style="display:block">Loading team news…</div></section>
   </div>
 
   <div id="view-teams" hidden>
@@ -744,7 +784,8 @@ const state = { standings:{}, fixtures:{}, ownerMaps:{}, errors:[], notes:[], in
                 tab:"home", tableLeague:LEAGUE_ORDER[0], tableView:"short", weeks:[], matchWeek:0, matchPlayer:"all",
                 openMatch:null, detailTab:"events", detailData:null, matchItems:[],
                 teamsPlayer:"all", openTeam:null, openProfileMatch:null, profileDetailData:null,
-                profileTab:"overview", profileGames:null, profileMonth:null, openPlayer:null, profileOrigin:null };
+                profileTab:"overview", profileGames:null, profileMonth:null, openPlayer:null, profileOrigin:null,
+                newsPlayer:"all", openArticle:null };
 
 function seasonStrings() {
   const now = new Date();
@@ -1974,6 +2015,192 @@ function sectionStats(json, lg) {
   return `<div class="fs-wrap"><div class="fs-title">Top stats</div>${poss}${rows}</div>`;
 }
 
+
+// --- News tab -----------------------------------------------------
+// ESPN league news feeds, matched to the 48 drafted teams. Articles open in an
+// in-app reader (full story via ESPN's article API), with a link-out fallback
+// for premium/video items or if the story can't be fetched.
+
+function timeAgo(d) {
+  const s = (Date.now() - +d) / 1000;
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  if (s < 7 * 86400) return `${Math.round(s / 86400)}d ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function newsArticleId(a) {
+  for (const href of [a?.links?.api?.news?.href, a?.links?.api?.self?.href]) {
+    const m = href && href.match(/news\/(\d+)/);
+    if (m) return m[1];
+  }
+  return a?.dataSourceIdentifier || null;
+}
+
+// which drafted teams (and owners) an article involves
+function newsTags(lg, a) {
+  const tags = [];
+  const seen = new Set();
+  const tryName = (name) => {
+    const idx = draftedOwnerIdx(lg, name);
+    if (idx == null) return;
+    const p = PLAYERS[idx];
+    const team = p.teams[lg];
+    if (seen.has(team)) return;
+    seen.add(team);
+    tags.push({ lg, team, player: p.name });
+  };
+  for (const c of (a.categories || [])) {
+    if (c.type === "team" && (c.description || c.team?.description)) tryName(c.description || c.team?.description);
+  }
+  const text = `${a.headline || ""} ${a.description || ""}`;
+  for (const p of PLAYERS) {
+    const team = p.teams[lg];
+    if (!team || seen.has(team)) continue;
+    const short = team.replace(/^(1\. )?(FC|AC|SS|SSC|US|USL|SC|CD|UD|RCD|RC|AS|OGC|Stade de|Stade)\s+/i, "");
+    if (text.includes(team) || (short.length > 3 && text.includes(short))) tryName(team);
+  }
+  return tags;
+}
+
+async function loadNews() {
+  if (state.newsPromise) return state.newsPromise;
+  state.newsPromise = (async () => {
+    const out = [];
+    await Promise.all(LEAGUE_ORDER.map(async (lg) => {
+      const slug = LEAGUES[lg].source.espn;
+      if (!slug) return;
+      const json = await fetchJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/news?limit=50`).catch(() => null);
+      for (const a of (json?.articles || [])) {
+        const published = new Date(a.published || a.lastModified || Date.now());
+        if (isNaN(+published)) continue;
+        out.push({
+          lg, id: newsArticleId(a),
+          headline: a.headline || "", description: a.description || "",
+          published, type: a.type || "", premium: !!a.premium,
+          img: a.images?.[0]?.url || null,
+          url: a.links?.web?.href || null,
+          tags: newsTags(lg, a),
+        });
+      }
+    }));
+    // dedupe cross-league copies of the same story
+    const seen = new Set();
+    const deduped = out.filter(a => {
+      const k = a.id || norm(a.headline);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    deduped.sort((a, b) => b.published - a.published);
+    state.newsArticles = deduped;
+    return deduped;
+  })();
+  return state.newsPromise;
+}
+
+function openNewsTab() {
+  renderNews();
+  loadNews().then(renderNews).catch(() => {
+    $("newsWrap").innerHTML = `<div class="card"><div class="empty-note">Couldn't load news — try Refresh.</div></div>`;
+  });
+}
+
+function newsFiltered() {
+  const arts = state.newsArticles || [];
+  const f = state.newsPlayer || "all";
+  if (f === "world") return arts;
+  if (f === "all") return arts.filter(a => a.tags.length);
+  return arts.filter(a => a.tags.some(t => t.player === f));
+}
+
+function newsChips(a) {
+  const chips = a.tags.slice(0, 2).map(t => {
+    const p = PLAYERS.find(x => x.name === t.player);
+    return `<span class="nw-chip"><span class="dot" style="background:${accent(p)}"></span>${esc(t.team)}</span>`;
+  }).join("");
+  return chips || `<span class="nw-chip nw-lg">${LEAGUES[a.lg].flag} ${esc(a.lg)}</span>`;
+}
+
+function renderNews() {
+  const wrap = $("newsWrap");
+  if (state.openArticle) return renderArticle();
+  if (!state.newsArticles) return;                 // initial loading note stays
+  const arts = newsFiltered();
+  if (!arts.length) {
+    wrap.innerHTML = `<div class="card"><div class="empty-note">No recent articles for ${state.newsPlayer === "all" ? "anyone's teams" : state.newsPlayer + "'s teams"} — try “All league news”.</div></div>`;
+    return;
+  }
+  const hero = arts.find(a => a.img) || arts[0];
+  const rest = arts.filter(a => a !== hero).slice(0, 40);
+  const heroHtml = `<div class="card nw-hero" data-nid="${esc(hero.id || "")}" role="button">
+      ${hero.img ? `<div class="nw-hero-img"><img src="${esc(hero.img)}" alt="" loading="lazy"></div>` : ""}
+      <div class="nw-hero-body">
+        <div class="nw-meta">${newsChips(hero)}<span class="nw-time">${timeAgo(hero.published)}</span></div>
+        <h3 class="nw-hero-head">${esc(hero.headline)}</h3>
+        <p class="nw-hero-desc">${esc(hero.description)}</p>
+      </div>
+    </div>`;
+  const rows = rest.map(a => `<div class="nw-row" data-nid="${esc(a.id || "")}" role="button">
+      ${a.img ? `<img class="nw-thumb" src="${esc(a.img)}" alt="" loading="lazy">` : `<span class="nw-thumb nw-thumb-ph">📰</span>`}
+      <div class="nw-row-body">
+        <div class="nw-row-head">${esc(a.headline)}</div>
+        <div class="nw-meta">${newsChips(a)}<span class="nw-time">${timeAgo(a.published)}</span></div>
+      </div>
+    </div>`).join("");
+  wrap.innerHTML = heroHtml + (rows ? `<div class="card nw-list">${rows}</div>` : "");
+}
+
+// strip ESPN story HTML down to safe text blocks; blockquotes become pull quotes
+function sanitizeStory(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("script,style,iframe,video,aside,figure").forEach(n => n.remove());
+  const blocks = [];
+  for (const n of doc.body.querySelectorAll("p, h2, h3, blockquote, li")) {
+    if (n.closest("blockquote") !== n && n.tagName !== "BLOCKQUOTE" && n.closest("blockquote")) continue;
+    const text = n.textContent.replace(/\s+/g, " ").trim();
+    if (!text || text.length < 3) continue;
+    if (n.tagName === "BLOCKQUOTE") blocks.push(`<blockquote class="nw-quote">${esc(text)}</blockquote>`);
+    else if (n.tagName === "H2" || n.tagName === "H3") blocks.push(`<h4>${esc(text)}</h4>`);
+    else if (n.tagName === "LI") blocks.push(`<p class="nw-li">• ${esc(text)}</p>`);
+    else blocks.push(`<p>${esc(text)}</p>`);
+  }
+  return blocks.join("");
+}
+
+async function renderArticle() {
+  const wrap = $("newsWrap");
+  const a = state.openArticle;
+  if (!a) return;
+  const meta = `<div class="nw-meta">${newsChips(a)}<span class="nw-time">${a.published.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</span></div>`;
+  const shell = (body) => `<button class="prof-back nw-back">← News</button>
+    <div class="card nw-article">
+      ${a.img ? `<div class="nw-hero-img"><img src="${esc(a.img)}" alt=""></div>` : ""}
+      <div class="nw-article-body">${meta}<h3 class="nw-hero-head">${esc(a.headline)}</h3>${body}</div>
+    </div>`;
+  const linkOut = a.url ? `<a class="nw-out" href="${esc(a.url)}" target="_blank" rel="noopener">Read on ESPN ↗</a>` : "";
+  if (a.premium || a.type === "Media" || !a.id) {
+    wrap.innerHTML = shell(`<p>${esc(a.description)}</p><p class="dim">${a.premium ? "This is an ESPN+ article." : "This story can't be shown in the app."}</p>${linkOut}`);
+    return;
+  }
+  wrap.innerHTML = shell(`<div class="empty-note">Loading article…</div>`);
+  try {
+    if (!state.storyCache) state.storyCache = {};
+    if (!(a.id in state.storyCache)) {
+      const json = await fetchJSON(`https://now.core.api.espn.com/v1/sports/news/${a.id}`);
+      const art = json?.headlines?.[0] || json;
+      state.storyCache[a.id] = art?.story || null;
+    }
+    if (state.openArticle !== a) return;
+    const story = state.storyCache[a.id];
+    const body = story ? sanitizeStory(story) : "";
+    wrap.innerHTML = shell(body || `<p>${esc(a.description)}</p>${linkOut}`);
+    window.scrollTo({ top: 0 });
+  } catch {
+    if (state.openArticle === a) wrap.innerHTML = shell(`<p>${esc(a.description)}</p>${linkOut}`);
+  }
+}
+
 // --- Teams tab ----------------------------------------------------
 function teamRowFor(lg, teamName) {
   const rows = tableFor(lg);
@@ -2254,6 +2481,7 @@ function showTab(tab) {
   document.querySelectorAll("nav.tabs .tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   $("view-home").hidden = tab !== "home";
   $("view-league").hidden = tab !== "league";
+  $("view-news").hidden = tab !== "news";
   $("view-teams").hidden = tab !== "teams";
   $("view-tables").hidden = tab !== "tables";
   $("view-matches").hidden = tab !== "matches";
@@ -2261,6 +2489,7 @@ function showTab(tab) {
   if (tab === "tables") renderTables();
   if (tab === "matches") renderMatches();
   if (tab === "league") renderLeague();
+  if (tab === "news") openNewsTab();
   if (tab === "home") {
     $("homeMain").hidden = !!state.openPlayer;
     $("playerProfile").hidden = !state.openPlayer;
@@ -2434,6 +2663,25 @@ $("playerProfile").addEventListener("click", (e) => {
   }
   const cell = e.target.closest(".team-nav[data-team]");
   if (cell) openTeamProfile(JSON.parse(cell.dataset.team));
+});
+$("newsPlayerSelect").innerHTML = `<option value="all">👥 Everyone's teams</option>`
+  + PLAYERS.map(p => `<option value="${esc(p.name)}">${esc(p.name)}'s teams</option>`).join("")
+  + `<option value="world">🌍 All league news</option>`;
+$("newsPlayerSelect").addEventListener("change", (e) => {
+  state.newsPlayer = e.target.value;
+  state.openArticle = null;
+  renderNews();
+});
+$("newsWrap").addEventListener("click", (e) => {
+  if (e.target.closest(".nw-back")) { state.openArticle = null; renderNews(); return; }
+  if (e.target.closest("a.nw-out")) return;                        // let the link work
+  const card = e.target.closest("[data-nid]");
+  if (!card) return;
+  const art = (state.newsArticles || []).find(x => String(x.id) === card.dataset.nid) ||
+              (state.newsArticles || [])[0];
+  if (!art) return;
+  state.openArticle = art;
+  renderArticle();
 });
 $("leagueWrap").addEventListener("click", (e) => {
   const card = e.target.closest(".lg-card[data-player]");
