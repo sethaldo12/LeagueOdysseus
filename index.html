@@ -163,14 +163,22 @@
   .dim { color: var(--muted); }
 
   /* Tabs */
-  nav.tabs { display: flex; gap: 3px; background: #e2e4e8; border-radius: 24px; padding: 4px; margin: 0 0 18px; width: 100%; }
+  nav.tabs {
+    display: flex; gap: 3px; background: #e2e4e8; border-radius: 26px; padding: 5px;
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    width: calc(100% - 24px); max-width: 520px; z-index: 60;
+    box-shadow: 0 6px 24px rgba(15,20,25,0.22);
+  }
+  .wrap { padding-bottom: 96px; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) nav.tabs { background: #24282c; } }
   nav.tabs .tab {
-    font: inherit; font-size: 12.5px; font-weight: 600; background: none; border: none; cursor: pointer;
-    color: var(--ink-2); padding: 8px 2px; border-radius: 20px; white-space: nowrap;
-    flex: 1 1 0; min-width: 0; text-align: center;
+    font: inherit; font-size: 12px; font-weight: 600; background: none; border: none; cursor: pointer;
+    color: var(--ink-2); padding: 10px 5px; border-radius: 22px; white-space: nowrap;
+    flex: 1 1 auto; text-align: center;
   }
-  @media (min-width: 700px) { nav.tabs { width: fit-content; } nav.tabs .tab { padding: 8px 18px; font-size: 13.5px; flex: none; } }
+  @media (max-width: 359px) { nav.tabs .tab { font-size: 10.5px; } }
+  @media (min-width: 700px) { nav.tabs .tab { font-size: 13px; } }
   nav.tabs .tab:hover { color: var(--ink); }
   nav.tabs .tab.active { color: var(--ink); font-weight: 700; background: var(--surface); box-shadow: 0 1px 3px rgba(20,25,32,0.12); }
 
@@ -352,6 +360,8 @@
   #profSched .card { margin-bottom: 12px; }
   #profSched .match-detail { padding: 11px 14px; border-top: 1px solid var(--grid); margin-top: 0; }
 
+  .team-nav { cursor: pointer; }
+  .team-nav:hover .tname, .team-nav:hover { text-decoration-color: var(--muted); }
   /* profile internal tabs + overview cards */
   .ptabs { display: flex; gap: 3px; background: #e2e4e8; border-radius: 22px; padding: 4px; margin: 0 0 12px; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ptabs { background: #24282c; } }
@@ -613,7 +623,7 @@ const state = { standings:{}, fixtures:{}, ownerMaps:{}, errors:[], notes:[], in
                 tab:"home", tableLeague:LEAGUE_ORDER[0], tableView:"short", weeks:[], matchWeek:0, matchPlayer:"all",
                 openMatch:null, detailTab:"events", detailData:null, matchItems:[],
                 teamsPlayer:"all", openTeam:null, openProfileMatch:null, profileDetailData:null,
-                profileTab:"overview", profileGames:null };
+                profileTab:"overview", profileGames:null, profileMonth:null };
 
 function seasonStrings() {
   const now = new Date();
@@ -946,8 +956,9 @@ function render() {
         const fx = nextFixtureFor(row.league, t?.name || row.teamName);
         if (fx) fxLine = `<div class="next-game">${fx.isHome ? "vs" : "@"} ${esc(fx.opp)} · ${fx.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>`;
       }
+      const navData = esc(JSON.stringify({ player: r.player.name, lg: row.league, teamName: row.teamName }));
       return `<tr>
-        <td class="team sticky">${crest}${esc(row.teamName)}${t ? `<span class="pos-chip">${ordinal(t.rank)}</span>` : `<span class="pos-chip dim">no data</span>`}${fxLine}</td>
+        <td class="team sticky team-nav" data-team="${navData}">${crest}${esc(row.teamName)}${t ? `<span class="pos-chip">${ordinal(t.rank)}</span>` : `<span class="pos-chip dim">no data</span>`}${fxLine}</td>
         <td class="league">${lgCfg.flag} ${esc(row.league)}</td>
         <td class="num">${t ? fmt(t.points, 0) : "—"}</td>
         <td class="num dim">${t ? fmt(t.played, 0) : "—"}</td>
@@ -1063,7 +1074,8 @@ function renderTables() {
     const owner = map.get(t.name);
     const weight = owner ? (WEIGHTS[`${lg}|${owner.teams[lg]}`] ?? 100) : weightFor(t.name);
     const crest = t.logo ? `<img class="crest" src="${esc(t.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="crest placeholder"></span>`;
-    const teamCell = `<td class="${teamClass}"><span class="trow">${crest}<span class="tname">${esc(t.name)}</span><span class="pos-chip">${ordinal(t.rank)}</span>${t.live ? `<span class="live-chip">⚽ ${esc(t.live.clock)} ${t.live.score}</span>` : ""}${owner ? ownerTag(owner) : ""}</span></td>`;
+    const navData = esc(JSON.stringify({ player: owner ? owner.name : null, lg, teamName: t.name }));
+    const teamCell = `<td class="${teamClass} team-nav" data-team="${navData}"><span class="trow">${crest}<span class="tname">${esc(t.name)}</span><span class="pos-chip">${ordinal(t.rank)}</span>${t.live ? `<span class="live-chip">⚽ ${esc(t.live.clock)} ${t.live.score}</span>` : ""}${owner ? ownerTag(owner) : ""}</span></td>`;
     const wtd = weight != null ? fmt(t.points * weight / 100) : "—";
     if (short) return `<tr class="${zoneOf(t.rank)}">
       ${teamCell}
@@ -1118,6 +1130,52 @@ function buildWeeks() {
   return weeks;
 }
 
+function buildMatchRow(lg, f, opts) {
+  const oh = findOwner(lg, f.home), oa = findOwner(lg, f.away);
+  const hr = rankOf(lg, f.home), ar = rankOf(lg, f.away);
+  const time = f.date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const crestFor = (name) => {
+    const row = state.standings[lg] ? matchTeam(state.standings[lg], name) : null;
+    return row && row.logo
+      ? `<img class="crest" src="${esc(row.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`
+      : `<span class="crest placeholder"></span>`;
+  };
+  const side = (full, short, rank, owner, isHome) => {
+    const label = `<span class="nm">${owner ? "<b>" : ""}${esc(short || full)}${owner ? "</b>" : ""}</span>`;
+    const nav = esc(JSON.stringify({ player: owner ? owner.name : null, lg, teamName: full }));
+    return `<div class="team-block ${isHome ? "tb-home" : "tb-away"}" data-team="${nav}">
+      <div class="tb-name">${isHome ? label + crestFor(full) : crestFor(full) + label}</div>
+      ${(rank || owner) ? `<div class="tb-sub">${rank ? `<span class="pos-chip">${ordinal(rank)}</span>` : ""}${owner ? ownerTag(owner) : ""}</div>` : ""}
+    </div>`;
+  };
+  const isLive = f.state === "in" && f.hs != null;
+  const isFT = f.state === "post" && f.hs != null;
+  const status = isLive ? `<span class="ms ms-live">${esc(f.clock || "")}</span>`
+               : isFT ? `<span class="ms ms-ft">FT</span>`
+               : `<span class="ms ms-time">${time}</span>`;
+  const attr = opts.keyAttr ? `data-key="${esc(opts.keyAttr)}"` : (opts.eidAttr ? `data-eid="${esc(opts.eidAttr)}"` : "");
+  return `<div class="match-row ${opts.open ? "open" : ""}" ${attr}>
+    <div class="mr-grid">
+      ${side(f.home, f.homeShort, hr, oh, true)}
+      <div class="mr-score ${isLive ? "live" : ""}">${(isLive || isFT) ? `${f.hs} – ${f.as}` : "vs"}</div>
+      ${side(f.away, f.awayShort, ar, oa, false)}
+    </div>
+    <div class="mr-bottom"><span class="mr-lg">${LEAGUES[lg].flag} ${esc(lg)}</span>${status}</div>
+    ${opts.open ? `<div class="match-detail" id="${opts.detailId}"><div class="empty-note">Loading match details…</div></div>` : ""}
+  </div>`;
+}
+
+function seasonMonths() {
+  const startYear = parseInt(SEASON.tsdb.split("-")[0], 10);
+  const out = [];
+  for (let i = 0; i < 10; i++) {                    // August … May
+    const m = (7 + i) % 12;                          // 7 = August (0-based)
+    const y = m >= 7 ? startYear : startYear + 1;
+    out.push({ y, m, label: new Date(y, m, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" }) });
+  }
+  return out;
+}
+
 function renderMatches() {
   const wk = state.weeks[state.matchWeek] || state.weeks[0];
   const wrap = $("matchesWrap");
@@ -1138,39 +1196,9 @@ function renderMatches() {
     wrap.innerHTML = `<div class="card"><div class="empty-note">No matches for ${state.matchPlayer === "all" ? "anyone's teams" : state.matchPlayer + "'s teams"} that week${state.errors.length ? " (some leagues failed to load)" : ""}.</div></div>`;
     return;
   }
-  const renderRow = (it) => {
-    const time = it.f.date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-    const hr = rankOf(it.lg, it.f.home), ar = rankOf(it.lg, it.f.away);
-    const crestFor = (name) => {
-      const row = state.standings[it.lg] ? matchTeam(state.standings[it.lg], name) : null;
-      return row && row.logo
-        ? `<img class="crest" src="${esc(row.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`
-        : `<span class="crest placeholder"></span>`;
-    };
-    const side = (full, short, rank, owner, isHome) => {
-      const label = `<span class="nm">${owner ? "<b>" : ""}${esc(short || full)}${owner ? "</b>" : ""}</span>`;
-      const nav = esc(JSON.stringify({ player: owner ? owner.name : null, lg: it.lg, teamName: full }));
-      return `<div class="team-block ${isHome ? "tb-home" : "tb-away"}" data-team="${nav}">
-        <div class="tb-name">${isHome ? label + crestFor(full) : crestFor(full) + label}</div>
-        ${(rank || owner) ? `<div class="tb-sub">${rank ? `<span class="pos-chip">${ordinal(rank)}</span>` : ""}${owner ? ownerTag(owner) : ""}</div>` : ""}
-      </div>`;
-    };
-    const isLive = it.f.state === "in" && it.f.hs != null;
-    const isFT = it.f.state === "post" && it.f.hs != null;
-    const status = isLive ? `<span class="ms ms-live">${esc(it.f.clock)}</span>`
-                 : isFT ? `<span class="ms ms-ft">FT</span>`
-                 : `<span class="ms ms-time">${time}</span>`;
-    const open = state.openMatch === it.key;
-    return `<div class="match-row ${open ? "open" : ""}" data-key="${esc(it.key)}">
-      <div class="mr-grid">
-        ${side(it.f.home, it.f.homeShort, hr, it.oh, true)}
-        <div class="mr-score ${isLive ? "live" : ""}">${(isLive || isFT) ? `${it.f.hs} – ${it.f.as}` : "vs"}</div>
-        ${side(it.f.away, it.f.awayShort, ar, it.oa, false)}
-      </div>
-      <div class="mr-bottom"><span class="mr-lg">${LEAGUES[it.lg].flag} ${esc(it.lg)}</span>${status}</div>
-      ${open ? `<div class="match-detail" id="matchDetail"><div class="empty-note">Loading match details…</div></div>` : ""}
-    </div>`;
-  };
+  const renderRow = (it) => buildMatchRow(it.lg, it.f, {
+    keyAttr: it.key, open: state.openMatch === it.key, detailId: "matchDetail",
+  });
   const groups = [];
   for (const it of items) {
     const dayKey = it.f.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
@@ -1378,8 +1406,7 @@ async function loadTeamSchedule(lg, teamName) {
     for (const g of season) {
       const isHome = hit(g.home), isAway = hit(g.away);
       if (!isHome && !isAway) continue;
-      games.push({ id: g.id, date: g.date, state: g.state, hs: g.hs, as: g.as, isHome,
-                   opp: isHome ? (g.awayShort || g.away) : (g.homeShort || g.home) });
+      games.push({ ...g, isHome, opp: isHome ? (g.awayShort || g.away) : (g.homeShort || g.home) });
     }
     games.sort((a, b) => a.date - b.date);
     return games;
@@ -1395,7 +1422,8 @@ async function loadTeamSchedule(lg, teamName) {
       const hs = nint(ev.intHomeScore), as = nint(ev.intAwayScore);
       const isHome = hit(ev.strHomeTeam);
       games.push({ id: null, date: when, state: (hs != null && as != null) ? "post" : "pre",
-                   hs, as, isHome, opp: isHome ? ev.strAwayTeam : ev.strHomeTeam });
+                   hs, as, isHome, opp: isHome ? ev.strAwayTeam : ev.strHomeTeam,
+                   home: ev.strHomeTeam, away: ev.strAwayTeam, homeShort: null, awayShort: null, clock: "" });
     }
     games.sort((a, b) => a.date - b.date);
     return games;
@@ -1492,27 +1520,23 @@ function renderProfileTab() {
   if (state.profileTab === "pmatches") {
     if (games === null) { el.innerHTML = `<div class="card"><div class="empty-note">Loading schedule…</div></div>`; return; }
     if (!games || !games.length) { el.innerHTML = `<div class="card"><div class="empty-note">Schedule isn't available for this team.</div></div>`; return; }
-    const upcoming = games.filter(g => g.state !== "post").sort((a, b) => a.date - b.date);
-    const results = games.filter(g => g.state === "post").sort((a, b) => b.date - a.date);
-    const rowHtml = (g) => {
-      const dt = g.date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-      const live = g.state === "in";
-      const done = g.state === "post" && g.hs != null;
-      const mine = g.isHome ? g.hs : g.as, theirs = g.isHome ? g.as : g.hs;
-      const res = done ? (mine > theirs ? "W" : mine === theirs ? "D" : "L") : null;
-      const right = done ? `<b>${g.hs} – ${g.as}</b>` :
-                    live ? `<span class="live-text">LIVE</span>` :
-                    g.date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-      return `<div class="sched-row" ${done && g.id ? `data-eid="${esc(g.id)}"` : ""}>
-        <span class="sr-date">${dt}</span>
-        <span class="sr-opp">${g.isHome ? "vs" : "@"} ${esc(g.opp)}</span>
-        ${res ? `<span class="fdot f${res}">${res}</span>` : `<span class="fdot fna"></span>`}
-        <span class="sr-right">${right}</span>
-      </div>${state.openProfileMatch && String(state.openProfileMatch) === String(g.id) ? `<div class="match-detail" id="profDetail"><div class="empty-note">Loading match details…</div></div>` : ""}`;
-    };
+    const months = seasonMonths();
+    if (state.profileMonth == null) {
+      const now = new Date();
+      const idx = months.findIndex(mo => mo.y === now.getFullYear() && mo.m === now.getMonth());
+      state.profileMonth = idx >= 0 ? idx : 0;
+    }
+    const mo = months[state.profileMonth];
+    const inMonth = games.filter(g => g.date.getFullYear() === mo.y && g.date.getMonth() === mo.m)
+                         .sort((a, b) => a.date - b.date);
+    const rows = inMonth.map(g => buildMatchRow(lg, g, {
+      eidAttr: g.id && g.state === "post" ? g.id : null,
+      open: g.id && String(state.openProfileMatch) === String(g.id), detailId: "profDetail",
+    })).join("");
     el.innerHTML = `
-      ${upcoming.length ? `<div class="card"><div class="match-day">Upcoming</div>${upcoming.map(rowHtml).join("")}</div>` : ""}
-      ${results.length ? `<div class="card"><div class="match-day">Results</div>${results.map(rowHtml).join("")}</div>` : ""}`;
+      <div class="controls"><select id="profMonthSelect">${months.map((m2, i) =>
+        `<option value="${i}" ${i === state.profileMonth ? "selected" : ""}>${esc(m2.label)}</option>`).join("")}</select></div>
+      <div class="card">${rows || `<div class="empty-note">No games in ${esc(mo.label)}.</div>`}</div>`;
     if (state.openProfileMatch) loadProfileDetail();
     return;
   }
@@ -1617,7 +1641,6 @@ function updateBanner() {
       ? `<span class="live-text">⚽ ${state.liveCount} match${state.liveCount > 1 ? "es" : ""} in play</span> — points and rankings include live scores as they stand, and the page refreshes itself every minute.`
       : `<span class="live-text">⚽ ${state.liveCount} match${state.liveCount > 1 ? "es" : ""} in play</span> — live scoring is off, so points update at full-time. Flip the Live scoring switch to project them now.`);
   }
-  msgs.push(...state.notes.map(n => `ℹ️ ${n}`));
   $("banner").innerHTML = msgs.join("<br>");
   $("banner").classList.toggle("show", msgs.length > 0);
 }
@@ -1661,6 +1684,7 @@ function openTeamProfile(team) {
   state.profileDetailData = null;
   state.profileGames = null;
   state.profileTab = "overview";
+  state.profileMonth = null;
   state.detailTab = "events";
   if (state.tab !== "teams") showTab("teams"); else renderTeams();
   window.scrollTo({ top: 0 });
@@ -1683,13 +1707,22 @@ $("teamsWrap").addEventListener("click", (e) => {
   if (e.target.closest(".prof-back")) { state.openTeam = null; state.openProfileMatch = null; state.profileDetailData = null; state.profileGames = null; renderTeams(); return; }
   const card = e.target.closest(".team-card");
   if (card) { openTeamProfile(JSON.parse(card.dataset.team)); return; }
-  const row = e.target.closest(".sched-row[data-eid]");
+  const tb = e.target.closest(".team-block[data-team]");
+  if (tb) { openTeamProfile(JSON.parse(tb.dataset.team)); return; }
+  const row = e.target.closest(".match-row[data-eid], .sched-row[data-eid]");
   if (row) {
     const eid = row.dataset.eid;
     state.openProfileMatch = String(state.openProfileMatch) === String(eid) ? null : eid;
     state.detailTab = "events"; state.profileDetailData = null;
     renderProfileTab();
     return;
+  }
+});
+$("teamsWrap").addEventListener("change", (e) => {
+  if (e.target.id === "profMonthSelect") {
+    state.profileMonth = parseInt(e.target.value, 10);
+    state.openProfileMatch = null; state.profileDetailData = null;
+    renderProfileTab();
   }
 });
 $("tableViewSeg").addEventListener("click", (e) => {
@@ -1718,6 +1751,14 @@ $("matchesWrap").addEventListener("click", (e) => {
   renderMatches();
 });
 document.querySelectorAll("nav.tabs .tab").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+$("players").addEventListener("click", (e) => {
+  const cell = e.target.closest(".team-nav[data-team]");
+  if (cell) openTeamProfile(JSON.parse(cell.dataset.team));
+});
+$("leagueTableWrap").addEventListener("click", (e) => {
+  const cell = e.target.closest(".team-nav[data-team]");
+  if (cell) openTeamProfile(JSON.parse(cell.dataset.team));
+});
 // Hard reload: bypasses every cache (page + data), so it also picks up new app versions
 $("refreshBtn").addEventListener("click", () => {
   location.href = location.pathname + "?v=" + Date.now();
