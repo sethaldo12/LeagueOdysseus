@@ -364,6 +364,15 @@
   .sp-minus { color: var(--bad); font-weight: 650; }
   .sp-total { font-weight: 800; }
   .home-filter { margin-bottom: 14px; }
+  .stand-row { cursor: pointer; }
+  .stand-row:hover td { background: color-mix(in srgb, var(--chip-bg) 45%, transparent); }
+  .stand-row .spn { text-decoration: underline dotted; text-decoration-color: transparent; text-underline-offset: 3px; }
+  .stand-row:hover .spn { text-decoration-color: var(--muted); }
+  .pp-dot { width: 26px; height: 26px; border-radius: 50%; flex: none; }
+  .pp-sub { color: var(--muted); font-size: 12.5px; }
+  .stat-tiles.ov4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 420px) { .stat-tiles.ov4 .st-val { font-size: 16px; } }
+  #playerProfile .card .head h2 { font-size: 16px; }
 
   /* Weekly recap + season race */
   #recapWrap .card, #raceWrap .card { margin-bottom: 14px; }
@@ -506,6 +515,7 @@
   <div class="loading" id="loading">Loading league tables…</div>
 
   <div id="view-home">
+    <div id="homeMain">
     <section class="tiles" id="tiles"></section>
     <div class="togglebar">
       <div class="toggle-row">
@@ -525,16 +535,16 @@
         <span class="switch-hint" id="liveHint">off — counts at full-time</span>
       </div>
     </div>
-    <div class="controls home-filter">
-      <select id="homePlayerSelect" aria-label="Filter player tables"></select>
-    </div>
+    <section id="watchWrap"></section>
+    <section id="bigWrap"></section>
     <section id="recapWrap"></section>
     <section id="raceWrap"></section>
-    <section class="players" id="players"></section>
     <details class="rules">
       <summary>Scoring rules</summary>
       <div class="inner" id="rulesText"></div>
     </details>
+    </div>
+    <div id="playerProfile" hidden></div>
   </div>
 
   <div id="view-teams" hidden>
@@ -710,7 +720,7 @@ const state = { standings:{}, fixtures:{}, ownerMaps:{}, errors:[], notes:[], in
                 tab:"home", tableLeague:LEAGUE_ORDER[0], tableView:"short", weeks:[], matchWeek:0, matchPlayer:"all",
                 openMatch:null, detailTab:"events", detailData:null, matchItems:[],
                 teamsPlayer:"all", openTeam:null, openProfileMatch:null, profileDetailData:null,
-                profileTab:"overview", profileGames:null, profileMonth:null, homePlayer:"all", profileOrigin:null };
+                profileTab:"overview", profileGames:null, profileMonth:null, openPlayer:null, profileOrigin:null };
 
 function seasonStrings() {
   const now = new Date();
@@ -1043,8 +1053,17 @@ function render() {
       <td class="num dim sp-behind">${i === 0 ? "—" : "−" + fmt(leader - r.shown)}</td>
     </tr>`).join("")}</tbody></table></div></div>`;
 
-  const shownPlayers = state.homePlayer === "all" ? results : results.filter(r => r.player.name === state.homePlayer);
-  $("players").innerHTML = shownPlayers.map(r => {
+  $("homeMain").hidden = !!state.openPlayer;
+  $("playerProfile").hidden = !state.openPlayer;
+  if (state.openPlayer) renderPlayerProfile(results, useRP);
+  renderWatch();
+  renderBig();
+
+  renderRules();
+}
+
+function buildPlayerCard(r, useRP) {
+  {
     const bodyRows = r.rows.map(row => {
       const lgCfg = LEAGUES[row.league];
       const t = row.row;
@@ -1098,9 +1117,100 @@ function render() {
         </tbody>
       </table></div>
     </div>`;
-  }).join("");
+  }
+}
 
-  renderRules();
+function renderPlayerProfile(results, useRP) {
+  const wrap = $("playerProfile");
+  const idx = results.findIndex(x => x.player.name === state.openPlayer);
+  if (idx < 0) { wrap.innerHTML = ""; return; }
+  const r = results[idx];
+  const rec = r.rows.reduce((a, row) => {
+    const t = row.row;
+    if (t) { a.gp += t.played || 0; a.w += t.w || 0; a.d += t.d || 0; a.l += t.l || 0; }
+    return a;
+  }, { gp: 0, w: 0, d: 0, l: 0 });
+  wrap.innerHTML = `
+    <button class="prof-back pp-back">← Home</button>
+    <div class="card prof-head">
+      <span class="pp-dot" style="background:${accent(r.player)}"></span>
+      <div class="prof-id">
+        <div class="prof-name">${esc(r.player.name)}</div>
+        <div class="pp-sub">${ordinal(idx + 1)} place · ${fmt(r.shown)} pts</div>
+      </div>
+    </div>
+    <div class="stat-tiles ov4">
+      <div class="card st-tile"><div class="st-val">${rec.gp}</div><div class="st-lab">Played</div></div>
+      <div class="card st-tile"><div class="st-val">${rec.w}</div><div class="st-lab">Wins</div></div>
+      <div class="card st-tile"><div class="st-val">${rec.d}</div><div class="st-lab">Ties</div></div>
+      <div class="card st-tile"><div class="st-val">${rec.l}</div><div class="st-lab">Losses</div></div>
+    </div>
+    ${buildPlayerCard(r, useRP)}`;
+}
+
+function openPlayerProfile(name) {
+  state.openPlayer = name;
+  if (state.tab !== "home") showTab("home"); else render();
+  window.scrollTo({ top: 0 });
+}
+
+// which player (index) drafted this feed team name in this league, if any
+function draftedOwnerIdx(lg, name) {
+  const v = norm(name || "");
+  if (!v) return null;
+  let best = null, bestDiff = Infinity;
+  PLAYERS.forEach((p, pi) => {
+    const team = p.teams[lg];
+    if (!team) return;
+    const n = norm(team);
+    if (v === n || v.includes(n) || n.includes(v)) {
+      const diff = Math.abs(v.length - n.length);
+      if (diff < bestDiff) { bestDiff = diff; best = pi; }
+    }
+  });
+  return best;
+}
+
+// Games to watch: next player-vs-player matchups (live first, then by kickoff)
+function renderWatch() {
+  const wrap = $("watchWrap");
+  const games = [];
+  for (const lg of LEAGUE_ORDER) for (const f of (state.fixtures[lg] || [])) {
+    if (f.state === "post") continue;
+    const upcoming = f.state === "pre" || isLiveFx(f) || (f.state === "in" && +f.date > Date.now());
+    if (!upcoming) continue;
+    const oh = draftedOwnerIdx(lg, f.home), oa = draftedOwnerIdx(lg, f.away);
+    if (oh == null || oa == null || oh === oa) continue;
+    games.push({ lg, f });
+  }
+  games.sort((a, b) => (isLiveFx(b.f) ? 1 : 0) - (isLiveFx(a.f) ? 1 : 0) || a.f.date - b.f.date);
+  const top = games.slice(0, 3);
+  wrap.innerHTML = top.length ? `<div class="card">
+    <div class="mini-head"><h3>Games to watch</h3><span class="sub">player vs player</span></div>
+    ${top.map(g => buildMatchRow(g.lg, g.f, { showDate: true })).join("")}</div>` : "";
+}
+
+// Latest big results: the last two player-vs-player games that finished
+function renderBig() {
+  const wrap = $("bigWrap");
+  const seen = new Set();
+  const list = [];
+  const add = (lg, t, home, away, hs, as, homeShort, awayShort) => {
+    const oh = draftedOwnerIdx(lg, home), oa = draftedOwnerIdx(lg, away);
+    if (oh == null || oa == null || oh === oa) return;
+    const key = `${lg}|${new Date(t).toDateString()}|${norm(home)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    list.push({ lg, f: { home, away, homeShort, awayShort, date: new Date(t), state: "post", hs, as, clock: "" } });
+  };
+  for (const g of (state.h2hGames || [])) add(g.lg, g.t, g.home, g.away, g.hs, g.as);
+  for (const lg of LEAGUE_ORDER) for (const f of (state.fixtures[lg] || []))
+    if (f.state === "post" && f.hs != null && f.as != null) add(lg, +f.date, f.home, f.away, f.hs, f.as, f.homeShort, f.awayShort);
+  list.sort((a, b) => b.f.date - a.f.date);
+  const top = list.slice(0, 2);
+  wrap.innerHTML = top.length ? `<div class="card">
+    <div class="mini-head"><h3>Latest big results</h3><span class="sub">player vs player</span></div>
+    ${top.map(g => buildMatchRow(g.lg, g.f, { showDate: true })).join("")}</div>` : "";
 }
 
 
@@ -1168,6 +1278,7 @@ async function ensureRaceData() {
   if (state.racePromise) return state.racePromise;
   state.racePromise = (async () => {
     const events = [];
+    const h2h = [];
     const months = raceMonthKeys();
     await Promise.all(LEAGUE_ORDER.map(async (lg) => {
       const cfg = LEAGUES[lg];
@@ -1179,16 +1290,21 @@ async function ensureRaceData() {
           if (seen.has(key)) continue;
           seen.add(key);
           raceAddGame(events, lg, g[1], g[2], g[3], g[4], g[5]);
+          const oh = draftedOwnerIdx(lg, g[2]), oa = draftedOwnerIdx(lg, g[3]);
+          if (oh != null && oa != null && oh !== oa) h2h.push({ lg, t: g[1], home: g[2], away: g[3], hs: g[4], as: g[5] });
         }
       } else {
         for (const f of (state.fixtures[lg] || [])) {
           if (f.state !== "post" || f.hs == null || f.as == null) continue;
           raceAddGame(events, lg, +f.date, f.home, f.away, f.hs, f.as);
+          const oh = draftedOwnerIdx(lg, f.home), oa = draftedOwnerIdx(lg, f.away);
+          if (oh != null && oa != null && oh !== oa) h2h.push({ lg, t: +f.date, home: f.home, away: f.away, hs: f.hs, as: f.as });
         }
       }
     }));
     events.sort((a, b) => a.t - b.t);
     state.raceEvents = events;
+    state.h2hGames = h2h;
     return events;
   })();
   return state.racePromise;
@@ -1823,7 +1939,7 @@ function renderTeamProfile() {
   const crest = row?.logo ? `<img class="prof-crest" src="${esc(row.logo)}" alt="" onerror="this.style.visibility='hidden'">` : `<span class="prof-crest crest placeholder"></span>`;
   const tabs = [["overview", "Overview"], ["pmatches", "Matches"], ["pstats", "Stats"]];
   wrap.innerHTML = `
-    <button class="prof-back">← ${({ home: "Home", matches: "Matches", tables: "Leagues" })[state.profileOrigin] || "All teams"}</button>
+    <button class="prof-back">← ${state.profileOrigin?.player ? esc(state.profileOrigin.player) : ({ home: "Home", matches: "Matches", tables: "Leagues" })[state.profileOrigin?.tab] || "All teams"}</button>
     <div class="card prof-head">
       ${crest}
       <div class="prof-id">
@@ -2025,7 +2141,7 @@ async function loadAll() {
   if (state.tab === "teams") renderTeams();
   clearTimeout(state.liveTimer);
   if (state.liveCount) state.liveTimer = setTimeout(loadAll, 60000);   // live scoreboard mode
-  ensureRaceData().then(() => { renderRecap(); renderRace(); }).catch(() => {});
+  ensureRaceData().then(() => { renderRecap(); renderRace(); renderBig(); }).catch(() => {});
 }
 
 $("seasonTag").textContent = SEASON.label + " season";
@@ -2034,7 +2150,7 @@ $("leagueSelect").addEventListener("change", (e) => { state.tableLeague = e.targ
 $("teamPlayerSelect").innerHTML = `<option value="all">👥 Everyone</option>` + PLAYERS.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("");
 $("teamPlayerSelect").addEventListener("change", (e) => { state.teamsPlayer = e.target.value; state.openTeam = null; renderTeams(); });
 function openTeamProfile(team) {
-  state.profileOrigin = state.tab;                  // remember where we came from
+  state.profileOrigin = { tab: state.tab, player: state.openPlayer };   // remember where we came from
   state.openTeam = team;
   state.openProfileMatch = null;
   state.profileDetailData = null;
@@ -2061,10 +2177,11 @@ $("teamsWrap").addEventListener("click", (e) => {
     return;
   }
   if (e.target.closest(".prof-back")) {
-    const origin = state.profileOrigin || "teams";
+    const origin = state.profileOrigin || { tab: "teams", player: null };
     state.openTeam = null; state.openProfileMatch = null; state.profileDetailData = null; state.profileGames = null;
     state.profileOrigin = null;
-    if (origin !== "teams") showTab(origin); else renderTeams();
+    if (origin.tab !== "teams") { state.openPlayer = origin.player || null; showTab(origin.tab); }
+    else renderTeams();
     return;
   }
   const card = e.target.closest(".team-card");
@@ -2112,13 +2229,25 @@ $("matchesWrap").addEventListener("click", (e) => {
   else { state.openMatch = key; state.detailTab = "events"; state.detailData = null; }
   renderMatches();
 });
-document.querySelectorAll("nav.tabs .tab").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
-$("homePlayerSelect").innerHTML = `<option value="all">👥 Everyone</option>` + PLAYERS.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("");
-$("homePlayerSelect").addEventListener("change", (e) => { state.homePlayer = e.target.value; render(); });
-$("players").addEventListener("click", (e) => {
+document.querySelectorAll("nav.tabs .tab").forEach(b => b.addEventListener("click", () => {
+  if (b.dataset.tab === "home") state.openPlayer = null;
+  showTab(b.dataset.tab);
+}));
+$("tiles").addEventListener("click", (e) => {
+  const row = e.target.closest(".stand-row[data-player]");
+  if (row) openPlayerProfile(row.dataset.player);
+});
+$("playerProfile").addEventListener("click", (e) => {
+  if (e.target.closest(".pp-back")) { state.openPlayer = null; render(); return; }
   const cell = e.target.closest(".team-nav[data-team]");
   if (cell) openTeamProfile(JSON.parse(cell.dataset.team));
 });
+for (const id of ["watchWrap", "bigWrap"]) {
+  $(id).addEventListener("click", (e) => {
+    const tb = e.target.closest(".team-block[data-team]");
+    if (tb) openTeamProfile(JSON.parse(tb.dataset.team));
+  });
+}
 $("leagueTableWrap").addEventListener("click", (e) => {
   const cell = e.target.closest(".team-nav[data-team]");
   if (cell) openTeamProfile(JSON.parse(cell.dataset.team));
