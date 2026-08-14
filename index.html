@@ -223,8 +223,10 @@
   .zone-legend .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
   /* Upcoming Matches tab */
+  #matchesWrap { display: flex; flex-direction: column; gap: 14px; }
+  .day-card .match-row:first-of-type { border-top: none; }
   .match-day { font-size: 15px; text-transform: none; letter-spacing: -0.01em; color: var(--ink);
-               font-weight: 750; padding: 15px 16px 7px; text-align: left; }
+               font-weight: 750; padding: 14px 16px 9px; text-align: left; border-bottom: 1px solid var(--grid); }
   .match-row { padding: 12px 12px; border-top: 1px solid var(--grid); }
   .mr-grid { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 10px; align-items: center; }
   .mr-bottom { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px; }
@@ -1059,10 +1061,7 @@ function renderMatches() {
     wrap.innerHTML = `<div class="card"><div class="empty-note">No matches for ${state.matchPlayer === "all" ? "anyone's teams" : state.matchPlayer + "'s teams"} that week${state.errors.length ? " (some leagues failed to load)" : ""}.</div></div>`;
     return;
   }
-  let html = "", lastDay = "";
-  for (const it of items) {
-    const dayKey = it.f.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
-    if (dayKey !== lastDay) { html += `<div class="match-day">${dayKey}</div>`; lastDay = dayKey; }
+  const renderRow = (it) => {
     const time = it.f.date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     const hr = rankOf(it.lg, it.f.home), ar = rankOf(it.lg, it.f.away);
     const crestFor = (name) => {
@@ -1084,7 +1083,7 @@ function renderMatches() {
                  : isFT ? `<span class="ms ms-ft">FT</span>`
                  : `<span class="ms ms-time">${time}</span>`;
     const open = state.openMatch === it.key;
-    html += `<div class="match-row ${open ? "open" : ""}" data-key="${esc(it.key)}">
+    return `<div class="match-row ${open ? "open" : ""}" data-key="${esc(it.key)}">
       <div class="mr-grid">
         ${side(it.f.home, it.f.homeShort, hr, it.oh, true)}
         <div class="mr-score ${isLive ? "live" : ""}">${(isLive || isFT) ? `${it.f.hs} – ${it.f.as}` : "vs"}</div>
@@ -1093,8 +1092,17 @@ function renderMatches() {
       <div class="mr-bottom"><span class="mr-lg">${LEAGUES[it.lg].flag} ${esc(it.lg)}</span>${status}</div>
       ${open ? `<div class="match-detail" id="matchDetail"><div class="empty-note">Loading match details…</div></div>` : ""}
     </div>`;
+  };
+  const groups = [];
+  for (const it of items) {
+    const dayKey = it.f.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+    if (!groups.length || groups[groups.length - 1].day !== dayKey) groups.push({ day: dayKey, items: [] });
+    groups[groups.length - 1].items.push(it);
   }
-  wrap.innerHTML = `<div class="card">${html}</div>`;
+  wrap.innerHTML = groups.map(g => `<div class="card day-card">
+    <div class="match-day">${g.day}</div>
+    ${g.items.map(renderRow).join("")}
+  </div>`).join("");
   if (state.openMatch) {
     const it = items.find(x => x.key === state.openMatch);
     if (it) loadMatchDetail(it);
@@ -1135,7 +1143,7 @@ function renderDetail() {
 const emptyNote = (t) => `<div class="empty-note">${t}</div>`;
 
 function sectionEvents(json) {
-  const evs = json?.keyEvents || [];
+  const evs = [...(json?.keyEvents || [])].reverse();   // most recent first: full-time at top, kickoff at bottom
   if (!evs.length) return emptyNote("No match events yet — they appear once the game kicks off.");
   const rows = evs.map(e => {
     const min = e.clock?.displayValue || "";
