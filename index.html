@@ -154,6 +154,7 @@
   }
   .next-game.live { color: var(--bad); font-weight: 700; }
   .team-sub { font-size: 11px; color: var(--muted); margin-top: 1px; padding-left: 27px; }
+  .tflag { margin-left: 6px; font-size: 12px; flex: none; }
   .team-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; padding-left: 27px; }
   table.lt-full td { vertical-align: top; }
   table.lt-full td.num, table.lt-full .rowtotal { padding-top: 9px; }
@@ -500,10 +501,6 @@
     </div>
     <div class="controls home-filter">
       <select id="homePlayerSelect" aria-label="Filter player tables"></select>
-      <div class="seg" id="homeViewSeg" role="group" aria-label="Table detail">
-        <button data-view="short" class="active">Short</button>
-        <button data-view="full">Full</button>
-      </div>
     </div>
     <section class="players" id="players"></section>
     <details class="rules">
@@ -685,7 +682,7 @@ const state = { standings:{}, fixtures:{}, ownerMaps:{}, errors:[], notes:[], in
                 tab:"home", tableLeague:LEAGUE_ORDER[0], tableView:"short", weeks:[], matchWeek:0, matchPlayer:"all",
                 openMatch:null, detailTab:"events", detailData:null, matchItems:[],
                 teamsPlayer:"all", openTeam:null, openProfileMatch:null, profileDetailData:null,
-                profileTab:"overview", profileGames:null, profileMonth:null, homePlayer:"all", homeView:"short" };
+                profileTab:"overview", profileGames:null, profileMonth:null, homePlayer:"all" };
 
 function seasonStrings() {
   const now = new Date();
@@ -983,7 +980,6 @@ function ordinal(n) {
 
 function render() {
   const useRP = state.includeRP;
-  const homeShort = state.homeView === "short";
   const results = PLAYERS.map(computePlayer)
     .map(r => ({ ...r, shown: useRP ? r.total : r.weighted }))
     .sort((a, b) => b.shown - a.shown);
@@ -1015,23 +1011,14 @@ function render() {
       let fxLine = "";
       if (t?.live) {
         fxLine = `<div class="next-game live">⚽ LIVE ${esc(t.live.clock)} · ${t.live.score} ${t.live.isHome ? "vs" : "@"} ${esc(t.live.opp)}</div>`;
-      } else if (homeShort) {
+      } else {
         const fx = nextFixtureFor(row.league, t?.name || row.teamName);
         if (fx) fxLine = `<div class="next-game">${fx.isHome ? "vs" : "@"} ${esc(fx.opp)} · ${fx.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div>`;
       }
       const navData = esc(JSON.stringify({ player: r.player.name, lg: row.league, teamName: row.teamName }));
-      const liveLine = t?.live ? `<div class="next-game live">⚽ LIVE ${esc(t.live.clock)} · ${t.live.score} ${t.live.isHome ? "vs" : "@"} ${esc(t.live.opp)}</div>` : "";
       const chip = t ? `<span class="pos-chip">${ordinal(t.rank)}</span>` : `<span class="pos-chip dim">no data</span>`;
       const tagsLine = useRP && (plusTags || minusTags) ? `<div class="team-tags">${plusTags}${minusTags}</div>` : "";
-      const sub = homeShort ? fxLine
-        : `<div class="team-sub">${lgCfg.flag} ${esc(row.league)}</div>${liveLine}${tagsLine}`;
-      const teamCell = `<td class="team team-nav" data-team="${navData}"><span class="trow">${crest}<span class="tname">${esc(row.teamName)}</span>${chip}</span>${sub}</td>`;
-      if (homeShort) return `<tr>
-        ${teamCell}
-        <td class="num dim">${row.weight}%</td>
-        <td class="num dim">${t ? fmt(t.played, 0) : "—"}</td>
-        <td class="num rowtotal">${t ? fmt(rowTotal) : "—"}</td>
-      </tr>`;
+      const teamCell = `<td class="team team-nav" data-team="${navData}"><span class="trow">${crest}<span class="tname">${esc(row.teamName)}</span>${chip}<span class="tflag">${lgCfg.flag}</span></span>${fxLine}${tagsLine}</td>`;
       return `<tr>
         ${teamCell}
         <td class="num">${t ? fmt(t.points, 0) : "—"}</td>
@@ -1050,20 +1037,17 @@ function render() {
     return `<div class="card">
       <div class="head"><span class="dot" style="background:${accent(r.player)}"></span>
         <h2>${esc(r.player.name)}</h2><span class="total">${fmt(r.shown)} pts</span></div>
-      <div class="tbl-scroll"><table class="lt-short${homeShort ? "" : " lt-full"}" style="min-width:0">
-        ${homeShort ? `<thead><tr><th>Team</th><th class="num">Weight</th><th class="num">GP</th><th class="num">Wg Pts</th></tr></thead>
-        <tbody>${bodyRows}
-          <tr class="totals"><td>Total</td><td></td><td class="num">${fmt(r.gp, 0)}</td><td class="num">${fmt(r.shown)}</td></tr>
-        </tbody>` : `<thead><tr>
+      <div class="tbl-scroll"><table class="lt-short lt-full" style="min-width:0">
+        <thead><tr>
           <th>Team</th><th class="num">Lg pts</th><th class="num">GP</th>
-          <th class="num">Weight</th><th class="num">Wg Pts</th>
+          <th class="num">Weight</th><th class="num">Total</th>
         </tr></thead>
         <tbody>${bodyRows}${adjRows}
           <tr class="totals">
             <td>Total</td><td></td><td class="num">${fmt(r.gp, 0)}</td><td></td>
             <td class="num">${fmt(r.shown)}</td>
           </tr>
-        </tbody>`}
+        </tbody>
       </table></div>
     </div>`;
   }).join("");
@@ -1824,13 +1808,6 @@ $("matchesWrap").addEventListener("click", (e) => {
 document.querySelectorAll("nav.tabs .tab").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 $("homePlayerSelect").innerHTML = `<option value="all">👥 Everyone</option>` + PLAYERS.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("");
 $("homePlayerSelect").addEventListener("change", (e) => { state.homePlayer = e.target.value; render(); });
-$("homeViewSeg").addEventListener("click", (e) => {
-  const b = e.target.closest("button");
-  if (!b) return;
-  state.homeView = b.dataset.view;
-  document.querySelectorAll("#homeViewSeg button").forEach(x => x.classList.toggle("active", x === b));
-  render();
-});
 $("players").addEventListener("click", (e) => {
   const cell = e.target.closest(".team-nav[data-team]");
   if (cell) openTeamProfile(JSON.parse(cell.dataset.team));
