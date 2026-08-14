@@ -377,7 +377,10 @@
   .stand-row .spn { text-decoration: underline dotted; text-decoration-color: transparent; text-underline-offset: 3px; }
   .stand-row:hover .spn { text-decoration-color: var(--muted); }
   .pp-dot { width: 26px; height: 26px; border-radius: 50%; flex: none; }
+  .pbadges { margin-left: 6px; font-size: 12px; letter-spacing: 1px; }
+  .prof-name .pbadges { font-size: 15px; }
   /* League tab manager cards */
+  .togglebar.tg-inline { margin: 2px 2px 16px; }
   .lg-card { display: flex; align-items: center; gap: 12px; padding: 15px 16px; margin-bottom: 12px; cursor: pointer; }
   .lg-card:hover { background: var(--surface-2); }
   .lg-rank { color: var(--muted); font-weight: 700; font-size: 13px; width: 26px; flex: none; font-variant-numeric: tabular-nums; }
@@ -544,24 +547,7 @@
   <div id="view-home">
     <div id="homeMain">
     <section class="tiles" id="tiles"></section>
-    <div class="togglebar">
-      <div class="toggle-row">
-        <label class="switch" title="Include live rewards & penalties in the scores">
-          <input type="checkbox" id="rpToggle">
-          <span class="track" aria-hidden="true"></span>
-          <span class="switch-label">Rewards &amp; penalties</span>
-        </label>
-        <span class="switch-hint" id="switchHint">off — not counted</span>
-      </div>
-      <div class="toggle-row live-row">
-        <label class="switch" title="Fold in-play scores into points and rankings as if they held">
-          <input type="checkbox" id="liveToggle">
-          <span class="track" aria-hidden="true"></span>
-          <span class="switch-label">Live scoring</span>
-        </label>
-        <span class="switch-hint" id="liveHint">off — counts at full-time</span>
-      </div>
-    </div>
+    <div class="togglebar" id="homeToggles"></div>
     <section id="watchWrap"></section>
     <section id="bigWrap"></section>
     <section id="recapWrap"></section>
@@ -1072,18 +1058,20 @@ function render() {
   const results = PLAYERS.map(computePlayer)
     .map(r => ({ ...r, shown: useRP ? r.total : r.weighted }))
     .sort((a, b) => b.shown - a.shown);
+  state.leaderName = results[0]?.player.name || null;
   const leader = results[0]?.shown ?? 0;
 
   $("tiles").innerHTML = `<div class="card stand-card"><div class="tbl-scroll"><table class="stand-tbl">
     <thead><tr><th>Player</th>${useRP ? `<th class="num">Base</th><th class="num">Rew</th><th class="num">Pen</th>` : ""}<th class="num">${useRP ? "Total" : "Pts"}</th><th class="num sp-gp">GP</th><th class="num sp-behind">Behind</th></tr></thead>
     <tbody>${results.map((r, i) => `<tr class="stand-row" data-player="${esc(r.player.name)}">
-      <td class="sp-name"><span class="dot" style="background:${accent(r.player)}"></span><span class="spn">${esc(r.player.name)}</span><span class="sp-pos">${ordinal(i + 1)}</span></td>
+      <td class="sp-name"><span class="dot" style="background:${accent(r.player)}"></span><span class="spn">${esc(r.player.name)}</span>${badgesFor(r.player.name)}<span class="sp-pos">${ordinal(i + 1)}</span></td>
       ${useRP ? `<td class="num dim">${fmt(r.weighted)}</td><td class="num sp-plus">+${fmt(r.rewards)}</td><td class="num sp-minus">${fmt(r.penalties)}</td>` : ""}
       <td class="num sp-total">${fmt(r.shown)}</td>
       <td class="num dim sp-gp">${fmt(r.gp, 0)}</td>
       <td class="num dim sp-behind">${i === 0 ? "—" : "−" + fmt(leader - r.shown)}</td>
     </tr>`).join("")}</tbody></table></div></div>`;
 
+  $("homeToggles").innerHTML = togglesHtml();
   $("homeMain").hidden = !!state.openPlayer;
   $("playerProfile").hidden = !state.openPlayer;
   if (state.openPlayer) renderPlayerProfile(results, useRP);
@@ -1092,6 +1080,26 @@ function render() {
   renderLeague();
 
   renderRules();
+}
+
+// shared Rewards&Penalties / Live-scoring switches (Home, League tab, player profiles)
+function togglesHtml() {
+  return `<div class="toggle-row">
+      <label class="switch" title="Include live rewards & penalties in the scores">
+        <input type="checkbox" class="tg-rp" ${state.includeRP ? "checked" : ""}>
+        <span class="track" aria-hidden="true"></span>
+        <span class="switch-label">Rewards &amp; penalties</span>
+      </label>
+      <span class="switch-hint">${state.includeRP ? "on — counted" : "off — not counted"}</span>
+    </div>
+    <div class="toggle-row live-row">
+      <label class="switch" title="Fold in-play scores into points and rankings as if they held">
+        <input type="checkbox" class="tg-live" ${state.useLive ? "checked" : ""}>
+        <span class="track" aria-hidden="true"></span>
+        <span class="switch-label">Live scoring</span>
+      </label>
+      <span class="switch-hint">${state.useLive ? "on — in-play scores count" : "off — counts at full-time"}</span>
+    </div>`;
 }
 
 function buildPlayerCard(r, useRP) {
@@ -1163,10 +1171,11 @@ function renderPlayerProfile(results, useRP) {
     <div class="card prof-head">
       <span class="pp-dot" style="background:${accent(r.player)}"></span>
       <div class="prof-id">
-        <div class="prof-name">${esc(r.player.name)}</div>
+        <div class="prof-name">${esc(r.player.name)}${badgesFor(r.player.name)}</div>
         <div class="pp-sub">${ordinal(idx + 1)} place · ${fmt(r.shown)} pts</div>
       </div>
     </div>
+    <div class="togglebar tg-inline">${togglesHtml()}</div>
     <div class="stat-tiles ov4">
       <div class="card st-tile"><div class="st-val">${rec.gp}</div><div class="st-lab">Played</div></div>
       <div class="card st-tile"><div class="st-val">${rec.w}</div><div class="st-lab">Wins</div></div>
@@ -1198,19 +1207,20 @@ function renderLeague() {
   const results = PLAYERS.map(computePlayer)
     .map(r => ({ ...r, shown: useRP ? r.total : r.weighted }))
     .sort((a, b) => b.shown - a.shown);
-  $("leagueWrap").innerHTML = results.map((r, i) => {
+  const cards = results.map((r, i) => {
     const rec = playerRecord(r);
     return `<div class="card lg-card" data-player="${esc(r.player.name)}" role="button" tabindex="0">
       <span class="lg-rank">${ordinal(i + 1)}</span>
       <span class="lg-dot" style="background:${accent(r.player)}"></span>
       <div class="lg-mid">
-        <div class="lg-name">${esc(r.player.name)}</div>
+        <div class="lg-name">${esc(r.player.name)}${badgesFor(r.player.name)}</div>
         <div class="lg-rec">${rec.gp} played · <b>${rec.w}-${rec.l}-${rec.d}</b> <span class="lg-wld">W-L-D</span></div>
       </div>
       <div class="lg-pts">${fmt(r.shown)}<span class="lg-pts-lab">pts</span></div>
       <span class="lg-go">›</span>
     </div>`;
   }).join("");
+  $("leagueWrap").innerHTML = `<div class="togglebar tg-inline">${togglesHtml()}</div>` + cards;
 }
 
 // which player (index) drafted this feed team name in this league, if any
@@ -1243,10 +1253,12 @@ function renderWatch() {
     games.push({ lg, f });
   }
   games.sort((a, b) => (isLiveFx(b.f) ? 1 : 0) - (isLiveFx(a.f) ? 1 : 0) || a.f.date - b.f.date);
-  const top = games.slice(0, 3);
+  const top = games.slice(0, 3).map(g => ({ ...g, key: `${g.lg}|${g.f.id || g.f.home + "@" + (+g.f.date)}` }));
+  state.watchItems = top;
   wrap.innerHTML = top.length ? `<div class="card">
     <div class="mini-head"><h3>Games to watch</h3><span class="sub">player vs player</span></div>
-    ${top.map(g => buildMatchRow(g.lg, g.f, { showDate: true })).join("")}</div>` : "";
+    ${top.map(g => buildMatchRow(g.lg, g.f, { showDate: true, keyAttr: g.key, open: state.openHomeMatch === g.key, detailId: "homeDetail" })).join("")}</div>` : "";
+  maybeLoadHomeDetail();
 }
 
 // Latest big results: the last two player-vs-player games that finished
@@ -1254,22 +1266,67 @@ function renderBig() {
   const wrap = $("bigWrap");
   const seen = new Set();
   const list = [];
-  const add = (lg, t, home, away, hs, as, homeShort, awayShort) => {
+  const add = (lg, t, home, away, hs, as, homeShort, awayShort, id) => {
     const oh = draftedOwnerIdx(lg, home), oa = draftedOwnerIdx(lg, away);
     if (oh == null || oa == null || oh === oa) return;
     const key = `${lg}|${new Date(t).toDateString()}|${norm(home)}`;
     if (seen.has(key)) return;
     seen.add(key);
-    list.push({ lg, f: { home, away, homeShort, awayShort, date: new Date(t), state: "post", hs, as, clock: "" } });
+    list.push({ lg, f: { id: id || null, home, away, homeShort, awayShort, date: new Date(t), state: "post", hs, as, clock: "" } });
   };
-  for (const g of (state.h2hGames || [])) add(g.lg, g.t, g.home, g.away, g.hs, g.as);
   for (const lg of LEAGUE_ORDER) for (const f of (state.fixtures[lg] || []))
-    if (f.state === "post" && f.hs != null && f.as != null) add(lg, +f.date, f.home, f.away, f.hs, f.as, f.homeShort, f.awayShort);
+    if (f.state === "post" && f.hs != null && f.as != null) add(lg, +f.date, f.home, f.away, f.hs, f.as, f.homeShort, f.awayShort, f.id);
+  for (const g of (state.h2hGames || [])) add(g.lg, g.t, g.home, g.away, g.hs, g.as);
   list.sort((a, b) => b.f.date - a.f.date);
-  const top = list.slice(0, 2);
+  const top = list.slice(0, 2).map(g => ({ ...g, key: `${g.lg}|${g.f.id || g.f.home + "@" + (+g.f.date)}` }));
+  state.bigItems = top;
   wrap.innerHTML = top.length ? `<div class="card">
     <div class="mini-head"><h3>Latest big results</h3><span class="sub">player vs player</span></div>
-    ${top.map(g => buildMatchRow(g.lg, g.f, { showDate: true })).join("")}</div>` : "";
+    ${top.map(g => buildMatchRow(g.lg, g.f, { showDate: true, keyAttr: g.key, open: state.openHomeMatch === g.key, detailId: "homeDetail" })).join("")}</div>` : "";
+  maybeLoadHomeDetail();
+}
+
+function homeMatchItem(key) {
+  return [...(state.watchItems || []), ...(state.bigItems || [])].find(x => x.key === key) || null;
+}
+
+function maybeLoadHomeDetail() {
+  if (!state.openHomeMatch) return;
+  const it = homeMatchItem(state.openHomeMatch);
+  if (it) loadHomeMatchDetail(it);
+}
+
+async function loadHomeMatchDetail(item) {
+  const el = document.getElementById("homeDetail");
+  if (!el) return;
+  const cfg = LEAGUES[item.lg];
+  if (!cfg.source.espn || !item.f.id) {
+    el.innerHTML = `<div class="empty-note">Match details aren't available for this game.</div>`;
+    return;
+  }
+  if (state.homeDetailData?.key === item.key) { fillHomeDetail(); return; }
+  try {
+    const json = await fetchJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${cfg.source.espn}/summary?event=${item.f.id}`);
+    if (state.openHomeMatch !== item.key) return;                // user moved on
+    state.homeDetailData = { key: item.key, json };
+    fillHomeDetail();
+  } catch (e) {
+    el.innerHTML = `<div class="empty-note">Couldn't load match details.</div>`;
+  }
+}
+
+function fillHomeDetail() {
+  const el = document.getElementById("homeDetail");
+  if (!el || !state.homeDetailData || state.homeDetailData.key !== state.openHomeMatch) return;
+  const json = state.homeDetailData.json;
+  const tab = state.detailTab;
+  const lg = String(state.openHomeMatch || "").split("|")[0] || null;
+  const content = tab === "lineups" ? sectionLineups(json) : tab === "stats" ? sectionStats(json, lg) : sectionEvents(json);
+  el.innerHTML = `<div class="dtabs">
+      ${[["events", "Events"], ["lineups", "Lineups"], ["stats", "Stats"]].map(([k, l]) =>
+        `<button class="dtab ${k === tab ? "active" : ""}" data-dtab="${k}">${l}</button>`).join("")}
+    </div>
+    <div class="dbody">${content}</div>`;
 }
 
 
@@ -1316,7 +1373,7 @@ async function raceMonthGames(slug, y, m, current) {
   return games;
 }
 
-function raceAddGame(events, lg, t, homeName, awayName, hs, as) {
+function raceAddGame(acc, lg, t, homeName, awayName, hs, as, eid) {
   const nh = norm(homeName || ""), na = norm(awayName || "");
   PLAYERS.forEach((p, pi) => {
     const team = p.teams[lg];
@@ -1329,14 +1386,16 @@ function raceAddGame(events, lg, t, homeName, awayName, hs, as) {
     const my = isHome ? hs : as, opp = isHome ? as : hs;
     const pts = my > opp ? 3 : my === opp ? 1 : 0;
     const w = (WEIGHTS[`${lg}|${team}`] ?? 100) / 100;
-    if (pts) events.push({ t, p: pi, d: pts * w });
+    if (pts) acc.events.push({ t, p: pi, d: pts * w });
+    acc.games.push({ t, p: pi, lg, team, gf: my, ga: opp, eid: eid ?? null });
   });
 }
 
 async function ensureRaceData() {
   if (state.racePromise) return state.racePromise;
   state.racePromise = (async () => {
-    const events = [];
+    const acc = { events: [], games: [] };
+    const events = acc.events;
     const h2h = [];
     const months = raceMonthKeys();
     await Promise.all(LEAGUE_ORDER.map(async (lg) => {
@@ -1348,47 +1407,114 @@ async function ensureRaceData() {
           const key = g[0] != null ? `i${g[0]}` : `${g[1]}|${g[2]}|${g[3]}`;
           if (seen.has(key)) continue;
           seen.add(key);
-          raceAddGame(events, lg, g[1], g[2], g[3], g[4], g[5]);
+          raceAddGame(acc, lg, g[1], g[2], g[3], g[4], g[5], g[0]);
           const oh = draftedOwnerIdx(lg, g[2]), oa = draftedOwnerIdx(lg, g[3]);
           if (oh != null && oa != null && oh !== oa) h2h.push({ lg, t: g[1], home: g[2], away: g[3], hs: g[4], as: g[5] });
         }
       } else {
         for (const f of (state.fixtures[lg] || [])) {
           if (f.state !== "post" || f.hs == null || f.as == null) continue;
-          raceAddGame(events, lg, +f.date, f.home, f.away, f.hs, f.as);
+          raceAddGame(acc, lg, +f.date, f.home, f.away, f.hs, f.as, null);
           const oh = draftedOwnerIdx(lg, f.home), oa = draftedOwnerIdx(lg, f.away);
           if (oh != null && oa != null && oh !== oa) h2h.push({ lg, t: +f.date, home: f.home, away: f.away, hs: f.hs, as: f.as });
         }
       }
     }));
     events.sort((a, b) => a.t - b.t);
+    acc.games.sort((a, b) => a.t - b.t);
     state.raceEvents = events;
+    state.raceGames = acc.games;
     state.h2hGames = h2h;
     return events;
   })();
   return state.racePromise;
 }
 
-function renderRecap() {
-  const wrap = $("recapWrap");
-  const ev = state.raceEvents;
-  if (!ev) { wrap.innerHTML = ""; return; }
+// the week shown in the recap and used for weekly badges: this week, or last
+// week when nothing has been played yet this week
+function weeklyWindow(ev) {
   const weekOf = (offset) => {
     const start = mondayOf(new Date());
     start.setDate(start.getDate() + 7 * offset);
     const end = new Date(start); end.setDate(end.getDate() + 7);
     return [+start, +end];
   };
+  const has = ([a, b]) => (ev || []).some(e => e.t >= a && e.t < b);
+  const cur = weekOf(0);
+  if (!has(cur) && has(weekOf(-1))) return { range: weekOf(-1), label: "Last week" };
+  return { range: cur, label: "This week" };
+}
+
+// red cards for one finished game, extracted from its summary and cached forever
+async function redCardsFor(lg, eid) {
+  const key = `loRC.${eid}.v1`;
+  try { const hit = localStorage.getItem(key); if (hit) return JSON.parse(hit); } catch {}
+  const slug = LEAGUES[lg]?.source?.espn;
+  if (!slug) return null;
+  const json = await fetchJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/summary?event=${eid}`).catch(() => null);
+  if (!json) return null;
+  const out = {};
+  for (const tm of (json?.boxscore?.teams || [])) {
+    const st = (tm.statistics || []).find(x => x.name === "redCards");
+    out[norm(tm.team?.displayName || "")] = st ? (parseFloat(st.displayValue) || 0) : 0;
+  }
+  try { localStorage.setItem(key, JSON.stringify(out)); } catch {}
+  return out;
+}
+
+// weekly badges: 🏆 leader · 🟥 most red cards · ⚽ most goals · 🔥 most wins · 💩 most losses
+async function computeBadges() {
+  const games = state.raceGames || [];
+  const { range } = weeklyWindow(state.raceEvents || []);
+  const inWin = games.filter(g => g.t >= range[0] && g.t < range[1]);
+  const agg = PLAYERS.map(() => ({ w: 0, l: 0, gf: 0, red: 0 }));
+  for (const g of inWin) {
+    const a = agg[g.p];
+    a.gf += g.gf;
+    if (g.gf > g.ga) a.w++; else if (g.gf < g.ga) a.l++;
+  }
+  const eids = [...new Map(inWin.filter(g => g.eid != null).map(g => [`${g.lg}|${g.eid}`, g])).keys()];
+  await Promise.all(eids.map(async (ke) => {
+    const [lg, eid] = ke.split("|");
+    const reds = await redCardsFor(lg, eid);
+    if (!reds) return;
+    for (const g of inWin) {
+      if (String(g.eid) !== eid || g.lg !== lg) continue;
+      const n = norm(g.team);
+      for (const [feedName, count] of Object.entries(reds)) {
+        if (feedName === n || feedName.includes(n) || n.includes(feedName)) { agg[g.p].red += count; break; }
+      }
+    }
+  }));
+  const maxBy = (k) => {
+    const mx = Math.max(...agg.map(a => a[k]));
+    return mx > 0 ? PLAYERS.filter((_, i) => agg[i][k] === mx).map(p => p.name) : [];
+  };
+  state.badges = { red: maxBy("red"), ball: maxBy("gf"), fire: maxBy("w"), poop: maxBy("l") };
+}
+
+function badgesFor(name) {
+  const b = state.badges || {};
+  let out = "";
+  if (state.leaderName === name) out += "🏆";
+  if ((b.red || []).includes(name)) out += "🟥";
+  if ((b.ball || []).includes(name)) out += "⚽";
+  if ((b.fire || []).includes(name)) out += "🔥";
+  if ((b.poop || []).includes(name)) out += "💩";
+  return out ? `<span class="pbadges" title="🏆 league leader · 🟥 most red cards this week · ⚽ most goals this week · 🔥 most wins this week · 💩 most losses this week">${out}</span>` : "";
+}
+
+function renderRecap() {
+  const wrap = $("recapWrap");
+  const ev = state.raceEvents;
+  if (!ev) { wrap.innerHTML = ""; return; }
+  const { range, label } = weeklyWindow(ev);
   const sums = ([a, b]) => {
     const out = PLAYERS.map(() => ({ pts: 0, games: 0 }));
     for (const e of ev) if (e.t >= a && e.t < b) { out[e.p].pts += e.d; out[e.p].games++; }
     return out;
   };
-  let range = weekOf(0), label = "This week", tot = sums(range);
-  if (tot.every(x => x.pts === 0)) {
-    const prev = sums(weekOf(-1));
-    if (prev.some(x => x.pts > 0)) { range = weekOf(-1); label = "Last week"; tot = prev; }
-  }
+  const tot = sums(range);
   const md = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const rows = PLAYERS.map((p, i) => ({ p, i, pts: tot[i].pts, games: tot[i].games }))
     .sort((a, b) => b.pts - a.pts)
@@ -2183,7 +2309,11 @@ function showTab(tab) {
   if (tab === "tables") renderTables();
   if (tab === "matches") renderMatches();
   if (tab === "league") renderLeague();
-  if (tab === "home" && state.raceEvents) { renderRecap(); renderRace(); }
+  if (tab === "home") {
+    $("homeMain").hidden = !!state.openPlayer;
+    $("playerProfile").hidden = !state.openPlayer;
+    if (state.raceEvents) { renderRecap(); renderRace(); }
+  }
 }
 
 function renderRules() {
@@ -2247,7 +2377,11 @@ async function loadAll() {
   if (state.tab === "teams") renderTeams();
   clearTimeout(state.liveTimer);
   if (state.liveCount) state.liveTimer = setTimeout(loadAll, 60000);   // live scoreboard mode
-  ensureRaceData().then(() => { renderRecap(); renderRace(); renderBig(); }).catch(() => {});
+  ensureRaceData().then(async () => {
+    renderRecap(); renderRace(); renderBig();
+    await computeBadges();
+    render();
+  }).catch(() => {});
 }
 
 $("seasonTag").textContent = SEASON.label + " season";
@@ -2359,8 +2493,18 @@ $("leagueWrap").addEventListener("click", (e) => {
 });
 for (const id of ["watchWrap", "bigWrap"]) {
   $(id).addEventListener("click", (e) => {
+    const tabBtn = e.target.closest(".dtab");
+    if (tabBtn) { state.detailTab = tabBtn.dataset.dtab; fillHomeDetail(); return; }
+    if (e.target.closest(".match-detail")) return;               // clicks inside the panel don't collapse it
     const tb = e.target.closest(".team-block[data-team]");
-    if (tb) openTeamProfile(JSON.parse(tb.dataset.team));
+    if (tb) { openTeamProfile(JSON.parse(tb.dataset.team)); return; }
+    const row = e.target.closest(".match-row[data-key]");
+    if (!row) return;
+    const key = row.dataset.key;
+    if (state.openHomeMatch === key) { state.openHomeMatch = null; }
+    else { state.openHomeMatch = key; state.detailTab = "events"; state.homeDetailData = null; }
+    renderWatch();
+    renderBig();
   });
 }
 $("leagueTableWrap").addEventListener("click", (e) => {
@@ -2371,18 +2515,18 @@ $("leagueTableWrap").addEventListener("click", (e) => {
 $("refreshBtn").addEventListener("click", () => {
   location.href = location.pathname + "?v=" + Date.now();
 });
-$("rpToggle").addEventListener("change", (e) => {
-  state.includeRP = e.target.checked;
-  $("switchHint").textContent = state.includeRP ? "on — counted" : "off — not counted";
-  render();
-});
-$("liveToggle").addEventListener("change", (e) => {
-  state.useLive = e.target.checked;
-  $("liveHint").textContent = state.useLive ? "on — in-play scores count" : "off — counts at full-time";
-  updateBanner();
-  render();
-  renderTables();
-  renderMatches();
+document.addEventListener("change", (e) => {
+  const el = e.target;
+  if (el.classList?.contains("tg-rp")) {
+    state.includeRP = el.checked;
+    render();
+  } else if (el.classList?.contains("tg-live")) {
+    state.useLive = el.checked;
+    updateBanner();
+    render();
+    renderTables();
+    renderMatches();
+  }
 });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 let raceResizeT = null;
