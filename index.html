@@ -276,6 +276,7 @@
   .mr-bottom { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px; }
   .ms { display: inline-block; font-size: 10.5px; font-weight: 700; }
   .ms-ft { background: var(--chip-bg); color: var(--ink-2); border-radius: 10px; padding: 3px 9px; }
+  .ms-date { color: var(--muted); margin-right: 8px; }
   .ms-live { background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); border-radius: 10px; padding: 3px 8px; animation: livePulse 2s ease-in-out infinite; }
   .ms-time { color: var(--ink-2); font-weight: 600; font-size: 11.5px; }
   .team-block { min-width: 0; }
@@ -1223,9 +1224,11 @@ function buildMatchRow(lg, f, opts) {
   };
   const isLive = isLiveFx(f);
   const isFT = f.state === "post" && f.hs != null;
-  const status = isLive ? `<span class="ms ms-live">${esc(f.clock || "")}</span>`
-               : isFT ? `<span class="ms ms-ft">FT</span>`
-               : `<span class="ms ms-time">${time}</span>`;
+  const dateStr = opts.showDate
+    ? `<span class="ms ms-date">${f.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</span>` : "";
+  const status = isLive ? `${dateStr}<span class="ms ms-live">${esc(f.clock || "")}</span>`
+               : isFT ? `${dateStr}<span class="ms ms-ft">FT</span>`
+               : `${dateStr}<span class="ms ms-time">${time}</span>`;
   const attr = opts.keyAttr ? `data-key="${esc(opts.keyAttr)}"` : (opts.eidAttr ? `data-eid="${esc(opts.eidAttr)}"` : "");
   return `<div class="match-row ${opts.open ? "open" : ""}" ${attr}>
     <div class="mr-grid">
@@ -1607,6 +1610,7 @@ function renderProfileTab() {
     const rows = inMonth.map(g => buildMatchRow(lg, g, {
       eidAttr: g.id && g.state === "post" ? g.id : null,
       open: g.id && String(state.openProfileMatch) === String(g.id), detailId: "profDetail",
+      showDate: true,
     })).join("");
     el.innerHTML = `
       <div class="controls"><select id="profMonthSelect">${months.map((m2, i) =>
