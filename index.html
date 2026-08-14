@@ -364,6 +364,31 @@
   .sp-minus { color: var(--bad); font-weight: 650; }
   .sp-total { font-weight: 800; }
   .home-filter { margin-bottom: 14px; }
+
+  /* Weekly recap + season race */
+  #recapWrap .card, #raceWrap .card { margin-bottom: 14px; }
+  .mini-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 16px 4px; }
+  .mini-head h3 { margin: 0; font-size: 15px; }
+  .mini-head .sub { color: var(--muted); font-size: 11.5px; }
+  .recap-row { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-top: 1px solid var(--grid); font-size: 13.5px; }
+  .recap-row:first-of-type { border-top: none; }
+  .recap-name { font-weight: 700; }
+  .recap-pts { margin-left: auto; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .recap-pts.zero { color: var(--muted); font-weight: 600; }
+  .recap-games { color: var(--muted); font-size: 11.5px; margin-left: 8px; }
+  .race-body { position: relative; padding: 4px 8px 10px; }
+  .race-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 2px 16px 4px; font-size: 11.5px; color: var(--ink-2); }
+  .race-legend .dot { width: 8px; height: 8px; }
+  .race-tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--grid);
+              border-radius: 10px; box-shadow: 0 4px 14px rgba(15,20,30,0.18); padding: 7px 10px; font-size: 11.5px;
+              display: none; z-index: 5; min-width: 118px; }
+  .race-tip .tt-date { color: var(--muted); margin-bottom: 3px; }
+  .race-tip .tt-row { display: flex; align-items: center; gap: 6px; }
+  .race-tip .tt-val { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; padding-left: 10px; }
+  details.race-data { padding: 0 16px 12px; color: var(--ink-2); font-size: 12px; }
+  details.race-data summary { cursor: pointer; }
+  details.race-data table { min-width: 0; width: 100%; margin-top: 6px; font-size: 12px; }
+  details.race-data th, details.race-data td { padding: 4px 6px; }
   @media (max-width: 480px) { .sp-behind { display: none; } }
 
   /* Teams tab */
@@ -503,6 +528,8 @@
     <div class="controls home-filter">
       <select id="homePlayerSelect" aria-label="Filter player tables"></select>
     </div>
+    <section id="recapWrap"></section>
+    <section id="raceWrap"></section>
     <section class="players" id="players"></section>
     <details class="rules">
       <summary>Scoring rules</summary>
@@ -1074,6 +1101,253 @@ function render() {
   }).join("");
 
   renderRules();
+}
+
+
+// --- Weekly recap + season race ----------------------------------
+// Both are reconstructed from full-time results: for every game one of the 48
+// drafted teams played, the team earns 3/1/0 league points x its draft weight.
+// (Base points only - rewards, penalties and manual bonuses are not included.)
+
+function raceMonthKeys() {
+  const startYear = parseInt(SEASON.tsdb.split("-")[0], 10);
+  const now = new Date();
+  const out = [];
+  for (let i = 0; i < 12; i++) {
+    const y = i < 6 ? startYear : startYear + 1;
+    const m = (6 + i) % 12;                                   // July -> June (0-based month)
+    const first = new Date(y, m, 1);
+    if (first > now) break;
+    out.push({ y, m, current: y === now.getFullYear() && m === now.getMonth() });
+  }
+  return out;
+}
+
+async function raceMonthGames(slug, y, m, current) {
+  const key = `loRace.${slug}.${y}${String(m + 1).padStart(2, "0")}.v3`;
+  if (!current) {
+    try { const hit = localStorage.getItem(key); if (hit) return JSON.parse(hit); } catch {}
+  }
+  const last = new Date(y, m + 1, 0).getDate();
+  const mm = String(m + 1).padStart(2, "0");
+  const json = await fetchJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${y}${mm}01-${y}${mm}${last}&limit=500`).catch(() => null);
+  const games = [];
+  for (const ev of (json?.events || [])) {
+    const st = ev?.status?.type?.state || ev?.competitions?.[0]?.status?.type?.state;
+    if (st !== "post") continue;
+    const comps = ev?.competitions?.[0]?.competitors || [];
+    const home = comps.find(c => c.homeAway === "home"), away = comps.find(c => c.homeAway === "away");
+    if (!home || !away || !ev.date) continue;
+    const sc = (c) => { const v = c?.score; return nint(v && v.displayValue !== undefined ? v.displayValue : v); };
+    const hs = sc(home), as = sc(away);
+    if (hs == null || as == null) continue;
+    games.push([ev.id || null, +new Date(ev.date), home.team?.displayName || "", away.team?.displayName || "", hs, as]);
+  }
+  if (!current) { try { localStorage.setItem(key, JSON.stringify(games)); } catch {} }
+  return games;
+}
+
+function raceAddGame(events, lg, t, homeName, awayName, hs, as) {
+  const nh = norm(homeName || ""), na = norm(awayName || "");
+  PLAYERS.forEach((p, pi) => {
+    const team = p.teams[lg];
+    if (!team) return;
+    const n = norm(team);
+    const hit = (v) => v && (v === n || v.includes(n) || n.includes(v));
+    let isHome = hit(nh), isAway = hit(na);
+    if (isHome && isAway) { if (Math.abs(nh.length - n.length) <= Math.abs(na.length - n.length)) isAway = false; else isHome = false; }
+    if (!isHome && !isAway) return;
+    const my = isHome ? hs : as, opp = isHome ? as : hs;
+    const pts = my > opp ? 3 : my === opp ? 1 : 0;
+    const w = (WEIGHTS[`${lg}|${team}`] ?? 100) / 100;
+    if (pts) events.push({ t, p: pi, d: pts * w });
+  });
+}
+
+async function ensureRaceData() {
+  if (state.racePromise) return state.racePromise;
+  state.racePromise = (async () => {
+    const events = [];
+    const months = raceMonthKeys();
+    await Promise.all(LEAGUE_ORDER.map(async (lg) => {
+      const cfg = LEAGUES[lg];
+      if (cfg.source.espn) {
+        const seen = new Set();
+        const chunks = await Promise.all(months.map(mo => raceMonthGames(cfg.source.espn, mo.y, mo.m, mo.current).catch(() => [])));
+        for (const games of chunks) for (const g of games) {
+          const key = g[0] != null ? `i${g[0]}` : `${g[1]}|${g[2]}|${g[3]}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          raceAddGame(events, lg, g[1], g[2], g[3], g[4], g[5]);
+        }
+      } else {
+        for (const f of (state.fixtures[lg] || [])) {
+          if (f.state !== "post" || f.hs == null || f.as == null) continue;
+          raceAddGame(events, lg, +f.date, f.home, f.away, f.hs, f.as);
+        }
+      }
+    }));
+    events.sort((a, b) => a.t - b.t);
+    state.raceEvents = events;
+    return events;
+  })();
+  return state.racePromise;
+}
+
+function renderRecap() {
+  const wrap = $("recapWrap");
+  const ev = state.raceEvents;
+  if (!ev) { wrap.innerHTML = ""; return; }
+  const weekOf = (offset) => {
+    const start = mondayOf(new Date());
+    start.setDate(start.getDate() + 7 * offset);
+    const end = new Date(start); end.setDate(end.getDate() + 7);
+    return [+start, +end];
+  };
+  const sums = ([a, b]) => {
+    const out = PLAYERS.map(() => ({ pts: 0, games: 0 }));
+    for (const e of ev) if (e.t >= a && e.t < b) { out[e.p].pts += e.d; out[e.p].games++; }
+    return out;
+  };
+  let range = weekOf(0), label = "This week", tot = sums(range);
+  if (tot.every(x => x.pts === 0)) {
+    const prev = sums(weekOf(-1));
+    if (prev.some(x => x.pts > 0)) { range = weekOf(-1); label = "Last week"; tot = prev; }
+  }
+  const md = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const rows = PLAYERS.map((p, i) => ({ p, i, pts: tot[i].pts, games: tot[i].games }))
+    .sort((a, b) => b.pts - a.pts)
+    .map(r => `<div class="recap-row">
+      <span class="dot" style="background:${accent(r.p)}"></span>
+      <span class="recap-name">${esc(r.p.name)}</span>
+      ${r.games ? `<span class="recap-games">${r.games} game${r.games > 1 ? "s" : ""}</span>` : ""}
+      <span class="recap-pts ${r.pts ? "" : "zero"}">${r.pts ? "+" + fmt(r.pts) : "0"}</span>
+    </div>`).join("");
+  wrap.innerHTML = `<div class="card">
+    <div class="mini-head"><h3>Weekly recap</h3><span class="sub">${label} · ${md(range[0])} – ${md(range[1] - 1)} · base pts</span></div>
+    ${rows}</div>`;
+}
+
+function renderRace() {
+  const wrap = $("raceWrap");
+  const ev = state.raceEvents;
+  if (!ev) { wrap.innerHTML = ""; return; }
+  if (!ev.length) {
+    wrap.innerHTML = `<div class="card"><div class="mini-head"><h3>Season race</h3><span class="sub">appears after the first results</span></div></div>`;
+    return;
+  }
+  // cumulative series sampled at each result date (plus "now")
+  const dates = [...new Set(ev.map(e => e.t))].sort((a, b) => a - b);
+  const tNow = Date.now();
+  if (dates[dates.length - 1] < tNow) dates.push(tNow);
+  const totals = PLAYERS.map(() => 0);
+  const series = PLAYERS.map(() => []);
+  let k = 0;
+  for (const d of dates) {
+    while (k < ev.length && ev[k].t <= d) { totals[ev[k].p] += ev[k].d; k++; }
+    PLAYERS.forEach((_, pi) => series[pi].push(totals[pi]));
+  }
+  const t0 = Math.min(dates[0], +mondayOf(new Date(dates[0]))) - 86400000;
+  const t1 = dates[dates.length - 1];
+  const yMax = Math.max(4, Math.ceil(Math.max(...totals) * 1.12));
+  const W = Math.max(300, (wrap.clientWidth || 340) - 16), H = 235;
+  const ML = 30, MR = 56, MT = 12, MB = 24;
+  const X = (t) => ML + (t - t0) / Math.max(1, t1 - t0) * (W - ML - MR);
+  const Y = (v) => MT + (1 - v / yMax) * (H - MT - MB);
+  // y gridlines on ~4 ticks
+  const step = yMax <= 8 ? 2 : yMax <= 20 ? 5 : yMax <= 60 ? 10 : yMax <= 120 ? 25 : 50;
+  let grid = "", yLabs = "";
+  for (let v = 0; v <= yMax; v += step) {
+    grid += `<line x1="${ML}" x2="${W - MR}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)" stroke-width="1"/>`;
+    yLabs += `<text x="${ML - 6}" y="${Y(v) + 3.5}" text-anchor="end" class="race-ax">${v}</text>`;
+  }
+  // x labels: month starts inside the domain (or start+end if short)
+  let xLabs = "";
+  const span = t1 - t0;
+  const fmtD = (t, o) => new Date(t).toLocaleDateString(undefined, o);
+  if (span > 50 * 86400000) {
+    const d = new Date(t0); d.setDate(1); d.setMonth(d.getMonth() + 1);
+    for (; +d < t1; d.setMonth(d.getMonth() + 1))
+      xLabs += `<text x="${X(+d)}" y="${H - 7}" text-anchor="middle" class="race-ax">${fmtD(+d, { month: "short" })}</text>`;
+  } else {
+    xLabs = `<text x="${ML}" y="${H - 7}" class="race-ax">${fmtD(t0 + 86400000, { month: "short", day: "numeric" })}</text>
+             <text x="${W - MR}" y="${H - 7}" text-anchor="end" class="race-ax">${fmtD(t1, { month: "short", day: "numeric" })}</text>`;
+  }
+  // lines + de-collided end labels
+  const paths = PLAYERS.map((p, pi) => {
+    // step line: totals jump on the matchday itself, flat in between
+    const pts = [`${X(t0)},${Y(0)}`];
+    let prev = 0;
+    dates.forEach((d, i) => {
+      const v = series[pi][i];
+      if (v !== prev) pts.push(`${X(d)},${Y(prev)}`);
+      pts.push(`${X(d)},${Y(v)}`);
+      prev = v;
+    });
+    return `<polyline points="${pts.join(" ")}" fill="none" stroke="${accent(p)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }).join("");
+  const ends = PLAYERS.map((p, pi) => ({ p, pi, y: Y(series[pi][series[pi].length - 1]) }))
+    .sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 13) ends[i].y = ends[i - 1].y + 13;
+  for (let i = ends.length - 1; i >= 0; i--) {
+    if (ends[i].y > H - MB - 4) ends[i].y = H - MB - 4;
+    if (i < ends.length - 1 && ends[i + 1].y - ends[i].y < 13) ends[i].y = ends[i + 1].y - 13;
+  }
+  const endLabs = ends.map(e => `<circle cx="${W - MR + 5}" cy="${e.y}" r="3.2" fill="${accent(e.p)}"/>
+    <text x="${W - MR + 11}" y="${e.y + 3.5}" class="race-lab">${esc(e.p.name)}</text>`).join("");
+  const legend = PLAYERS.map(p => `<span style="display:inline-flex;align-items:center;gap:5px"><span class="dot" style="background:${accent(p)}"></span>${esc(p.name)}</span>`).join("");
+  // weekly rows for the data table (Mondays + latest)
+  const tableRows = [];
+  {
+    const wk = mondayOf(new Date(dates[0])); wk.setDate(wk.getDate() + 7);
+    const cum = PLAYERS.map(() => 0); let j = 0;
+    const pushRow = (t) => tableRows.push(`<tr><td>${fmtD(t, { month: "short", day: "numeric" })}</td>${cum.map(v => `<td class="num">${fmt(v)}</td>`).join("")}</tr>`);
+    for (; +wk < t1; wk.setDate(wk.getDate() + 7)) {
+      while (j < ev.length && ev[j].t < +wk) { cum[ev[j].p] += ev[j].d; j++; }
+      pushRow(+wk - 86400000);
+    }
+    while (j < ev.length) { cum[ev[j].p] += ev[j].d; j++; }
+    pushRow(t1);
+  }
+  wrap.innerHTML = `<div class="card">
+    <div class="mini-head"><h3>Season race</h3><span class="sub">base pts from results — rewards not included</span></div>
+    <div class="race-legend">${legend}</div>
+    <div class="race-body">
+      <svg id="raceSvg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cumulative points by player across the season">
+        <style>.race-ax { font: 10px system-ui, sans-serif; fill: var(--muted); font-variant-numeric: tabular-nums; }
+               .race-lab { font: 600 10.5px system-ui, sans-serif; fill: var(--ink-2); }</style>
+        ${grid}${yLabs}${xLabs}${paths}${endLabs}
+        <line id="raceCross" y1="${MT}" y2="${H - MB}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
+        <rect x="${ML}" y="${MT}" width="${W - ML - MR}" height="${H - MT - MB}" fill="transparent" id="raceHit"/>
+      </svg>
+      <div class="race-tip" id="raceTip"></div>
+    </div>
+    <details class="race-data"><summary>Data (weekly)</summary>
+      <table><thead><tr><th>Through</th>${PLAYERS.map(p => `<th class="num">${esc(p.name)}</th>`).join("")}</tr></thead>
+      <tbody>${tableRows.join("")}</tbody></table></details>
+  </div>`;
+  // hover: crosshair + tooltip at nearest sample
+  const svg = $("raceSvg"), tip = $("raceTip"), cross = $("raceCross");
+  const show = (clientX) => {
+    const r = svg.getBoundingClientRect();
+    const px = clientX - r.left;
+    let best = 0, bd = Infinity;
+    dates.forEach((d, i) => { const dd = Math.abs(X(d) - px); if (dd < bd) { bd = dd; best = i; } });
+    const d = dates[best];
+    cross.setAttribute("x1", X(d)); cross.setAttribute("x2", X(d));
+    cross.setAttribute("visibility", "visible");
+    const vals = PLAYERS.map((p, pi) => ({ p, v: series[pi][best] })).sort((a, b) => b.v - a.v);
+    tip.innerHTML = `<div class="tt-date">${fmtD(d, { weekday: "short", month: "short", day: "numeric" })}</div>` +
+      vals.map(x => `<div class="tt-row"><span class="dot" style="background:${accent(x.p)}"></span>${esc(x.p.name)}<span class="tt-val">${fmt(x.v)}</span></div>`).join("");
+    tip.style.display = "block";
+    const bw = tip.offsetWidth;
+    const left = Math.min(Math.max(X(d) - bw / 2, 4), W - bw - 4);
+    tip.style.left = left + "px";
+    tip.style.top = (MT + 2) + "px";
+  };
+  $("raceHit").addEventListener("pointermove", (e) => show(e.clientX));
+  $("raceHit").addEventListener("pointerdown", (e) => show(e.clientX));
+  svg.addEventListener("pointerleave", () => { tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); });
 }
 
 // --- League Tables tab -------------------------------------------
@@ -1687,6 +1961,7 @@ function showTab(tab) {
   if (tab === "teams") renderTeams();
   if (tab === "tables") renderTables();
   if (tab === "matches") renderMatches();
+  if (tab === "home" && state.raceEvents) { renderRecap(); renderRace(); }
 }
 
 function renderRules() {
@@ -1750,6 +2025,7 @@ async function loadAll() {
   if (state.tab === "teams") renderTeams();
   clearTimeout(state.liveTimer);
   if (state.liveCount) state.liveTimer = setTimeout(loadAll, 60000);   // live scoreboard mode
+  ensureRaceData().then(() => { renderRecap(); renderRace(); }).catch(() => {});
 }
 
 $("seasonTag").textContent = SEASON.label + " season";
@@ -1865,6 +2141,17 @@ $("liveToggle").addEventListener("change", (e) => {
   renderMatches();
 });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+let raceResizeT = null;
+window.addEventListener("resize", () => {
+  clearTimeout(raceResizeT);
+  raceResizeT = setTimeout(() => { if (state.raceEvents && state.tab === "home") renderRace(); }, 250);
+});
+try {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    render(); if (state.raceEvents) { renderRecap(); renderRace(); }
+  });
+} catch {}
+
 loadAll();
 </script>
 </body>
