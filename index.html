@@ -343,14 +343,22 @@
   }
   .stat-teams { display: flex; justify-content: space-between; font-size: 11px; text-transform: uppercase;
                 letter-spacing: 0.05em; padding: 0 2px 8px; }
-  .stat-line { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
-  .stat-name { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; flex: 1; padding: 0 8px; }
-  .stat-v { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 40px; }
-  .stat-v.home { color: var(--home-c); text-align: left; }
-  .stat-v.away { color: var(--away-c); text-align: right; }
-  .stat-bar { display: flex; gap: 3px; height: 10px; margin: 5px 0 13px; }
-  .sb-home { background: var(--home-c); border-radius: 999px; }
-  .sb-away { background: var(--away-c); border-radius: 999px; }
+  /* FotMob-style Top stats */
+  .fs-wrap { padding: 2px 6px 8px; }
+  .fs-title { text-align: center; font-weight: 800; font-size: 14.5px; margin: 4px 0 12px; }
+  .fs-poss-label { text-align: center; color: var(--ink-2); font-size: 12.5px; margin-bottom: 8px; }
+  .fs-poss { display: flex; gap: 3px; height: 28px; margin-bottom: 6px; }
+  .fs-ph, .fs-pa { display: flex; align-items: center; font-size: 12.5px; font-weight: 800;
+                   min-width: 44px; transition: width 0.3s; }
+  .fs-ph { justify-content: flex-start; padding-left: 11px; border-radius: 15px 4px 4px 15px; }
+  .fs-pa { justify-content: flex-end; padding-right: 11px; border-radius: 4px 15px 15px 4px; }
+  .fs-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
+            padding: 7px 0; font-size: 13.5px; }
+  .fs-lab { text-align: center; font-size: 13px; color: var(--ink); }
+  .fs-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .fs-val.h { justify-self: start; }
+  .fs-val.a { justify-self: end; }
+  .fs-val.win { border-radius: 16px; padding: 2.5px 10px; font-weight: 800; }
   .empty-note { color: var(--muted); font-size: 13.5px; padding: 26px 14px; text-align: center; }
 
   /* home standings table + filter */
@@ -369,16 +377,31 @@
   .stand-row .spn { text-decoration: underline dotted; text-decoration-color: transparent; text-underline-offset: 3px; }
   .stand-row:hover .spn { text-decoration-color: var(--muted); }
   .pp-dot { width: 26px; height: 26px; border-radius: 50%; flex: none; }
+  /* League tab manager cards */
+  .lg-card { display: flex; align-items: center; gap: 12px; padding: 15px 16px; margin-bottom: 12px; cursor: pointer; }
+  .lg-card:hover { background: var(--surface-2); }
+  .lg-rank { color: var(--muted); font-weight: 700; font-size: 13px; width: 26px; flex: none; font-variant-numeric: tabular-nums; }
+  .lg-dot { width: 22px; height: 22px; border-radius: 50%; flex: none; }
+  .lg-mid { min-width: 0; }
+  .lg-name { font-weight: 800; font-size: 16px; }
+  .lg-rec { color: var(--ink-2); font-size: 12.5px; margin-top: 2px; line-height: 1.4; }
+  .lg-rec b { white-space: nowrap; }
+  .lg-wld { color: var(--muted); font-size: 10.5px; }
+  .lg-pts { margin-left: auto; font-weight: 800; font-size: 19px; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 4px; }
+  .lg-pts-lab { color: var(--muted); font-size: 11px; font-weight: 600; }
+  .lg-go { color: var(--muted); font-weight: 800; }
   .pp-sub { color: var(--muted); font-size: 12.5px; }
   .stat-tiles.ov4 { grid-template-columns: repeat(4, 1fr); }
   @media (max-width: 420px) { .stat-tiles.ov4 .st-val { font-size: 16px; } }
   #playerProfile .card .head h2 { font-size: 16px; }
 
   /* Weekly recap + season race */
-  #recapWrap .card, #raceWrap .card { margin-bottom: 14px; }
+  #watchWrap .card, #bigWrap .card, #recapWrap .card, #raceWrap .card { margin-bottom: 14px; }
   .mini-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 16px 4px; }
-  .mini-head h3 { margin: 0; font-size: 15px; }
+  .mini-head h3 { margin: 0; font-size: 15px; white-space: nowrap; }
   .mini-head .sub { color: var(--muted); font-size: 11.5px; }
+  .mini-head.col { flex-direction: column; align-items: flex-start; gap: 1px; padding-bottom: 2px; }
+  .race-head-row { display: flex; align-items: baseline; justify-content: space-between; width: 100%; gap: 10px; flex-wrap: wrap; }
   .recap-row { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-top: 1px solid var(--grid); font-size: 13.5px; }
   .recap-row:first-of-type { border-top: none; }
   .recap-name { font-weight: 700; }
@@ -386,15 +409,16 @@
   .recap-pts.zero { color: var(--muted); font-weight: 600; }
   .recap-games { color: var(--muted); font-size: 11.5px; margin-left: 8px; }
   .race-body { position: relative; padding: 4px 8px 10px; }
-  .race-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 2px 16px 4px; font-size: 11.5px; color: var(--ink-2); }
-  .race-legend .dot { width: 8px; height: 8px; }
+  .race-legend { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 11px; color: var(--ink-2); font-weight: 600; }
+  .race-legend > span { background: var(--chip-bg); border-radius: 14px; padding: 3px 9px; }
+  .race-legend .dot { width: 7px; height: 7px; }
   .race-tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--grid);
               border-radius: 10px; box-shadow: 0 4px 14px rgba(15,20,30,0.18); padding: 7px 10px; font-size: 11.5px;
               display: none; z-index: 5; min-width: 118px; }
   .race-tip .tt-date { color: var(--muted); margin-bottom: 3px; }
   .race-tip .tt-row { display: flex; align-items: center; gap: 6px; }
   .race-tip .tt-val { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; padding-left: 10px; }
-  details.race-data { padding: 0 16px 12px; color: var(--ink-2); font-size: 12px; }
+  details.race-data { padding: 0 16px 12px; color: var(--muted); font-size: 11.5px; }
   details.race-data summary { cursor: pointer; }
   details.race-data table { min-width: 0; width: 100%; margin-top: 6px; font-size: 12px; }
   details.race-data th, details.race-data td { padding: 4px 6px; }
@@ -501,12 +525,15 @@
     <button class="tab active" data-tab="home" role="tab">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 3 11h2.4v9h5v-6h3.2v6h5v-9H21z" fill="currentColor"/></svg>
       <span>Home</span></button>
+    <button class="tab" data-tab="league" role="tab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v1.6h4V8c0 2.6-1.9 4.6-4.3 5a5.6 5.6 0 0 1-3.1 2.7V18h3v3H7.4v-3h3v-2.3A5.6 5.6 0 0 1 7.3 13C4.9 12.6 3 10.6 3 8V4.6h4zm-2.3 3.2V8c0 1.4.9 2.6 2.2 3.1a9 9 0 0 1-.5-3.9zm14.6 0h-1.7a9 9 0 0 1-.5 3.9c1.3-.5 2.2-1.7 2.2-3.1z" fill="currentColor"/></svg>
+      <span>League</span></button>
     <button class="tab" data-tab="matches" role="tab">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M12 8.1 8.5 10.6l1.35 4.1h4.3l1.35-4.1z" fill="currentColor"/><path d="M12 3.6v4.5M8.5 10.6 4.2 9.3M9.85 14.7l-2.6 3.5M14.15 14.7l2.6 3.5M15.5 10.6l4.3-1.3" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
       <span>Matches</span></button>
     <button class="tab" data-tab="tables" role="tab">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v1.6h4V8c0 2.6-1.9 4.6-4.3 5a5.6 5.6 0 0 1-3.1 2.7V18h3v3H7.4v-3h3v-2.3A5.6 5.6 0 0 1 7.3 13C4.9 12.6 3 10.6 3 8V4.6h4zm-2.3 3.2V8c0 1.4.9 2.6 2.2 3.1a9 9 0 0 1-.5-3.9zm14.6 0h-1.7a9 9 0 0 1-.5 3.9c1.3-.5 2.2-1.7 2.2-3.1z" fill="currentColor"/></svg>
-      <span>Leagues</span></button>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7 2.6h10A2.4 2.4 0 0 1 19.4 5v14a2.4 2.4 0 0 1-2.4 2.4H7A2.4 2.4 0 0 1 4.6 19V5A2.4 2.4 0 0 1 7 2.6zm.4 4.2h9.2v1.7H7.4zm0 4h9.2v1.7H7.4zm0 4h5.8v1.7H7.4z" fill="currentColor"/></svg>
+      <span>Tables</span></button>
     <button class="tab" data-tab="teams" role="tab">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.8 2.6 5.8 6.3.6-4.8 4.2 1.4 6.2L12 16.4l-5.5 3.2 1.4-6.2-4.8-4.2 6.3-.6z" fill="currentColor"/></svg>
       <span>Teams</span></button>
@@ -545,6 +572,10 @@
     </details>
     </div>
     <div id="playerProfile" hidden></div>
+  </div>
+
+  <div id="view-league" hidden>
+    <section id="leagueWrap"></section>
   </div>
 
   <div id="view-teams" hidden>
@@ -1058,6 +1089,7 @@ function render() {
   if (state.openPlayer) renderPlayerProfile(results, useRP);
   renderWatch();
   renderBig();
+  renderLeague();
 
   renderRules();
 }
@@ -1125,13 +1157,9 @@ function renderPlayerProfile(results, useRP) {
   const idx = results.findIndex(x => x.player.name === state.openPlayer);
   if (idx < 0) { wrap.innerHTML = ""; return; }
   const r = results[idx];
-  const rec = r.rows.reduce((a, row) => {
-    const t = row.row;
-    if (t) { a.gp += t.played || 0; a.w += t.w || 0; a.d += t.d || 0; a.l += t.l || 0; }
-    return a;
-  }, { gp: 0, w: 0, d: 0, l: 0 });
+  const rec = playerRecord(r);
   wrap.innerHTML = `
-    <button class="prof-back pp-back">← Home</button>
+    <button class="prof-back pp-back">← ${state.ppOrigin === "league" ? "League" : "Home"}</button>
     <div class="card prof-head">
       <span class="pp-dot" style="background:${accent(r.player)}"></span>
       <div class="prof-id">
@@ -1149,9 +1177,40 @@ function renderPlayerProfile(results, useRP) {
 }
 
 function openPlayerProfile(name) {
+  state.ppOrigin = state.tab === "league" ? "league" : "home";
   state.openPlayer = name;
-  if (state.tab !== "home") showTab("home"); else render();
+  if (state.tab !== "home") showTab("home");
+  render();
   window.scrollTo({ top: 0 });
+}
+
+function playerRecord(r) {
+  return r.rows.reduce((a, row) => {
+    const t = row.row;
+    if (t) { a.gp += t.played || 0; a.w += t.w || 0; a.d += t.d || 0; a.l += t.l || 0; }
+    return a;
+  }, { gp: 0, w: 0, d: 0, l: 0 });
+}
+
+// League tab: the four managers, ordered by the table
+function renderLeague() {
+  const useRP = state.includeRP;
+  const results = PLAYERS.map(computePlayer)
+    .map(r => ({ ...r, shown: useRP ? r.total : r.weighted }))
+    .sort((a, b) => b.shown - a.shown);
+  $("leagueWrap").innerHTML = results.map((r, i) => {
+    const rec = playerRecord(r);
+    return `<div class="card lg-card" data-player="${esc(r.player.name)}" role="button" tabindex="0">
+      <span class="lg-rank">${ordinal(i + 1)}</span>
+      <span class="lg-dot" style="background:${accent(r.player)}"></span>
+      <div class="lg-mid">
+        <div class="lg-name">${esc(r.player.name)}</div>
+        <div class="lg-rec">${rec.gp} played · <b>${rec.w}-${rec.l}-${rec.d}</b> <span class="lg-wld">W-L-D</span></div>
+      </div>
+      <div class="lg-pts">${fmt(r.shown)}<span class="lg-pts-lab">pts</span></div>
+      <span class="lg-go">›</span>
+    </div>`;
+  }).join("");
 }
 
 // which player (index) drafted this feed team name in this league, if any
@@ -1391,16 +1450,8 @@ function renderRace() {
   }
   // lines + de-collided end labels
   const paths = PLAYERS.map((p, pi) => {
-    // step line: totals jump on the matchday itself, flat in between
-    const pts = [`${X(t0)},${Y(0)}`];
-    let prev = 0;
-    dates.forEach((d, i) => {
-      const v = series[pi][i];
-      if (v !== prev) pts.push(`${X(d)},${Y(prev)}`);
-      pts.push(`${X(d)},${Y(v)}`);
-      prev = v;
-    });
-    return `<polyline points="${pts.join(" ")}" fill="none" stroke="${accent(p)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const pts = [`${X(t0)},${Y(0)}`, ...dates.map((d, i) => `${X(d)},${Y(series[pi][i])}`)];
+    return `<polyline points="${pts.join(" ")}" fill="none" stroke="${accent(p)}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" opacity="0.95"/>`;
   }).join("");
   const ends = PLAYERS.map((p, pi) => ({ p, pi, y: Y(series[pi][series[pi].length - 1]) }))
     .sort((a, b) => a.y - b.y);
@@ -1409,8 +1460,12 @@ function renderRace() {
     if (ends[i].y > H - MB - 4) ends[i].y = H - MB - 4;
     if (i < ends.length - 1 && ends[i + 1].y - ends[i].y < 13) ends[i].y = ends[i + 1].y - 13;
   }
-  const endLabs = ends.map(e => `<circle cx="${W - MR + 5}" cy="${e.y}" r="3.2" fill="${accent(e.p)}"/>
+  const endLabs = ends.map(e => `<circle cx="${W - MR + 5}" cy="${e.y}" r="3.4" fill="${accent(e.p)}"/>
     <text x="${W - MR + 11}" y="${e.y + 3.5}" class="race-lab">${esc(e.p.name)}</text>`).join("");
+  const lastDots = PLAYERS.map((p, pi) =>
+    `<circle cx="${X(t1)}" cy="${Y(series[pi][series[pi].length - 1])}" r="3" fill="${accent(p)}" stroke="var(--surface)" stroke-width="1.5"/>`).join("");
+  const hoverDots = PLAYERS.map((p, pi) =>
+    `<circle id="raceDot${pi}" r="3.6" fill="${accent(p)}" stroke="var(--surface)" stroke-width="1.6" visibility="hidden"/>`).join("");
   const legend = PLAYERS.map(p => `<span style="display:inline-flex;align-items:center;gap:5px"><span class="dot" style="background:${accent(p)}"></span>${esc(p.name)}</span>`).join("");
   // weekly rows for the data table (Mondays + latest)
   const tableRows = [];
@@ -1426,13 +1481,16 @@ function renderRace() {
     pushRow(t1);
   }
   wrap.innerHTML = `<div class="card">
-    <div class="mini-head"><h3>Season race</h3><span class="sub">base pts from results — rewards not included</span></div>
-    <div class="race-legend">${legend}</div>
+    <div class="mini-head col">
+      <div class="race-head-row"><h3>Season race</h3><div class="race-legend">${legend}</div></div>
+      <span class="sub">cumulative base points · rewards not included</span>
+    </div>
     <div class="race-body">
       <svg id="raceSvg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cumulative points by player across the season">
-        <style>.race-ax { font: 10px system-ui, sans-serif; fill: var(--muted); font-variant-numeric: tabular-nums; }
-               .race-lab { font: 600 10.5px system-ui, sans-serif; fill: var(--ink-2); }</style>
-        ${grid}${yLabs}${xLabs}${paths}${endLabs}
+        <style>.race-ax { font: 9.5px system-ui, sans-serif; fill: var(--muted); font-variant-numeric: tabular-nums; }
+               .race-lab { font: 650 10.5px system-ui, sans-serif; fill: var(--ink-2);
+                           paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }</style>
+        ${grid}${yLabs}${xLabs}${paths}${lastDots}${endLabs}${hoverDots}
         <line id="raceCross" y1="${MT}" y2="${H - MB}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
         <rect x="${ML}" y="${MT}" width="${W - ML - MR}" height="${H - MT - MB}" fill="transparent" id="raceHit"/>
       </svg>
@@ -1452,6 +1510,11 @@ function renderRace() {
     const d = dates[best];
     cross.setAttribute("x1", X(d)); cross.setAttribute("x2", X(d));
     cross.setAttribute("visibility", "visible");
+    PLAYERS.forEach((_, pi) => {
+      const dot = $("raceDot" + pi);
+      dot.setAttribute("cx", X(d)); dot.setAttribute("cy", Y(series[pi][best]));
+      dot.setAttribute("visibility", "visible");
+    });
     const vals = PLAYERS.map((p, pi) => ({ p, v: series[pi][best] })).sort((a, b) => b.v - a.v);
     tip.innerHTML = `<div class="tt-date">${fmtD(d, { weekday: "short", month: "short", day: "numeric" })}</div>` +
       vals.map(x => `<div class="tt-row"><span class="dot" style="background:${accent(x.p)}"></span>${esc(x.p.name)}<span class="tt-val">${fmt(x.v)}</span></div>`).join("");
@@ -1463,7 +1526,10 @@ function renderRace() {
   };
   $("raceHit").addEventListener("pointermove", (e) => show(e.clientX));
   $("raceHit").addEventListener("pointerdown", (e) => show(e.clientX));
-  svg.addEventListener("pointerleave", () => { tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); });
+  svg.addEventListener("pointerleave", () => {
+    tip.style.display = "none"; cross.setAttribute("visibility", "hidden");
+    PLAYERS.forEach((_, pi) => $("raceDot" + pi).setAttribute("visibility", "hidden"));
+  });
 }
 
 // --- League Tables tab -------------------------------------------
@@ -1705,7 +1771,7 @@ function renderDetail() {
   if (!el || !state.detailData || state.detailData.key !== state.openMatch) return;
   const json = state.detailData.json;
   const tab = state.detailTab;
-  const content = tab === "lineups" ? sectionLineups(json) : tab === "stats" ? sectionStats(json) : sectionEvents(json);
+  const content = tab === "lineups" ? sectionLineups(json) : tab === "stats" ? sectionStats(json, String(state.openMatch || "").split("|")[0] || null) : sectionEvents(json);
   el.innerHTML = `<div class="dtabs">
       ${[["events", "Events"], ["lineups", "Lineups"], ["stats", "Stats"]].map(([k, l]) =>
         `<button class="dtab ${k === tab ? "active" : ""}" data-dtab="${k}">${l}</button>`).join("")}
@@ -1764,32 +1830,70 @@ function sectionLineups(json) {
 }
 
 const STAT_ORDER = [
-  ["possessionPct", "Possession %"], ["totalShots", "Shots"], ["shotsOnTarget", "Shots on target"],
+  ["possessionPct", "Ball possession"], ["totalShots", "Total shots"], ["shotsOnTarget", "Shots on target"],
   ["wonCorners", "Corners"], ["foulsCommitted", "Fouls"], ["saves", "Saves"], ["offsides", "Offsides"],
   ["yellowCards", "Yellow cards"], ["redCards", "Red cards"], ["totalPasses", "Passes"], ["passPct", "Pass accuracy %"],
 ];
 
-function sectionStats(json) {
+// FotMob-style "Top stats": split possession bar, then value | label | value rows
+// where the better side's number sits in a team-colored pill.
+const LOWER_BETTER = new Set(["foulsCommitted", "offsides", "yellowCards", "redCards"]);
+
+function statTeamColor(lg, teamObj) {
+  const name = teamObj?.displayName || "";
+  const oIdx = lg ? draftedOwnerIdx(lg, name) : null;
+  if (oIdx != null) return accent(PLAYERS[oIdx]);
+  const c = teamObj?.color;
+  if (c && /^[0-9a-f]{6}$/i.test(c)) return "#" + c;
+  return null;
+}
+
+function yiqText(bg) {
+  const x = bg.replace("#", "");
+  const yiq = (parseInt(x.substr(0, 2), 16) * 299 + parseInt(x.substr(2, 2), 16) * 587 + parseInt(x.substr(4, 2), 16) * 114) / 1000;
+  return yiq > 150 ? "#111" : "#fff";
+}
+
+function sectionStats(json, lg) {
   const teams = json?.boxscore?.teams || [];
   if (teams.length < 2) return emptyNote("Match stats aren't available for this game.");
   const [a, b] = teams;
+  const hc = statTeamColor(lg, a.team) || "#44546e";
+  const ac = statTeamColor(lg, b.team) || "#8a4f5f";
   const aMap = {}, bMap = {};
   for (const s of (a.statistics || [])) aMap[s.name] = s;
   for (const s of (b.statistics || [])) bMap[s.name] = s;
   let picks = STAT_ORDER.filter(([k]) => aMap[k] && bMap[k]);
   if (picks.length < 3) picks = (a.statistics || []).filter(s => bMap[s.name]).map(s => [s.name, s.label || s.name]);
   if (!picks.length) return emptyNote("Match stats aren't available for this game.");
-  const rows = picks.map(([k, label]) => {
+  const pill = (color) => `background:${color};color:${yiqText(color)}`;
+  let poss = "";
+  const pk = picks.find(([k]) => k === "possessionPct");
+  if (pk) {
+    const ap = parseFloat(aMap.possessionPct.displayValue) || 50;
+    const bp = parseFloat(bMap.possessionPct.displayValue) || (100 - ap);
+    const aw = ap / (ap + bp) * 100;
+    poss = `<div class="fs-poss-label">Ball possession</div>
+      <div class="fs-poss">
+        <span class="fs-ph" style="width:${aw.toFixed(1)}%;${pill(hc)}">${Math.round(ap)}%</span>
+        <span class="fs-pa" style="width:${(100 - aw).toFixed(1)}%;${pill(ac)}">${Math.round(bp)}%</span>
+      </div>`;
+  }
+  const rows = picks.filter(([k]) => k !== "possessionPct").map(([k, label]) => {
     const av = aMap[k].displayValue, bv = bMap[k].displayValue;
-    const an = parseFloat(av) || 0, bn = parseFloat(bv) || 0;
-    const ap = (an + bn) ? an / (an + bn) * 100 : 50;
-    return `<div class="stat-block">
-      <div class="stat-line"><span class="stat-v home">${esc(av)}</span><span class="stat-name">${esc(label)}</span><span class="stat-v away">${esc(bv)}</span></div>
-      <div class="stat-bar"><span class="sb-home" style="width:${ap.toFixed(1)}%"></span><span class="sb-away" style="width:${(100 - ap).toFixed(1)}%"></span></div>
+    const an = parseFloat(av), bn = parseFloat(bv);
+    let aWin = false, bWin = false;
+    if (!isNaN(an) && !isNaN(bn) && an !== bn) {
+      const aBetter = LOWER_BETTER.has(k) ? an < bn : an > bn;
+      aWin = aBetter; bWin = !aBetter;
+    }
+    return `<div class="fs-row">
+      <span class="fs-val h ${aWin ? "win" : ""}" ${aWin ? `style="${pill(hc)}"` : ""}>${esc(av)}</span>
+      <span class="fs-lab">${esc(label)}</span>
+      <span class="fs-val a ${bWin ? "win" : ""}" ${bWin ? `style="${pill(ac)}"` : ""}>${esc(bv)}</span>
     </div>`;
   }).join("");
-  const head = `<div class="stat-teams"><span class="stat-v home">${esc(a.team?.abbreviation || a.team?.displayName || "")}</span><span class="stat-v away">${esc(b.team?.abbreviation || b.team?.displayName || "")}</span></div>`;
-  return `<div class="stats-wrap">${head}${rows}</div>`;
+  return `<div class="fs-wrap"><div class="fs-title">Top stats</div>${poss}${rows}</div>`;
 }
 
 // --- Teams tab ----------------------------------------------------
@@ -1939,7 +2043,7 @@ function renderTeamProfile() {
   const crest = row?.logo ? `<img class="prof-crest" src="${esc(row.logo)}" alt="" onerror="this.style.visibility='hidden'">` : `<span class="prof-crest crest placeholder"></span>`;
   const tabs = [["overview", "Overview"], ["pmatches", "Matches"], ["pstats", "Stats"]];
   wrap.innerHTML = `
-    <button class="prof-back">← ${state.profileOrigin?.player ? esc(state.profileOrigin.player) : ({ home: "Home", matches: "Matches", tables: "Leagues" })[state.profileOrigin?.tab] || "All teams"}</button>
+    <button class="prof-back">← ${state.profileOrigin?.player ? esc(state.profileOrigin.player) : ({ home: "Home", matches: "Matches", tables: "Tables", league: "League" })[state.profileOrigin?.tab] || "All teams"}</button>
     <div class="card prof-head">
       ${crest}
       <div class="prof-id">
@@ -2059,7 +2163,7 @@ function fillProfileDetail() {
   if (!el || !state.profileDetailData) return;
   const json = state.profileDetailData.json;
   const tab = state.detailTab;
-  const content = tab === "lineups" ? sectionLineups(json) : tab === "stats" ? sectionStats(json) : sectionEvents(json);
+  const content = tab === "lineups" ? sectionLineups(json) : tab === "stats" ? sectionStats(json, state.openTeam?.lg || null) : sectionEvents(json);
   el.innerHTML = `<div class="dtabs">
       ${[["events", "Events"], ["lineups", "Lineups"], ["stats", "Stats"]].map(([k, l]) =>
         `<button class="dtab ${k === tab ? "active" : ""}" data-dtab="${k}">${l}</button>`).join("")}
@@ -2071,12 +2175,14 @@ function showTab(tab) {
   state.tab = tab;
   document.querySelectorAll("nav.tabs .tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   $("view-home").hidden = tab !== "home";
+  $("view-league").hidden = tab !== "league";
   $("view-teams").hidden = tab !== "teams";
   $("view-tables").hidden = tab !== "tables";
   $("view-matches").hidden = tab !== "matches";
   if (tab === "teams") renderTeams();
   if (tab === "tables") renderTables();
   if (tab === "matches") renderMatches();
+  if (tab === "league") renderLeague();
   if (tab === "home" && state.raceEvents) { renderRecap(); renderRace(); }
 }
 
@@ -2238,9 +2344,18 @@ $("tiles").addEventListener("click", (e) => {
   if (row) openPlayerProfile(row.dataset.player);
 });
 $("playerProfile").addEventListener("click", (e) => {
-  if (e.target.closest(".pp-back")) { state.openPlayer = null; render(); return; }
+  if (e.target.closest(".pp-back")) {
+    const o = state.ppOrigin;
+    state.openPlayer = null; state.ppOrigin = null;
+    if (o === "league") showTab("league"); else render();
+    return;
+  }
   const cell = e.target.closest(".team-nav[data-team]");
   if (cell) openTeamProfile(JSON.parse(cell.dataset.team));
+});
+$("leagueWrap").addEventListener("click", (e) => {
+  const card = e.target.closest(".lg-card[data-player]");
+  if (card) openPlayerProfile(card.dataset.player);
 });
 for (const id of ["watchWrap", "bigWrap"]) {
   $(id).addEventListener("click", (e) => {
