@@ -1717,8 +1717,8 @@ function updateBanner() {
   if (state.errors.length) msgs.push(`⚠️ Couldn't load: ${state.errors.join(", ")} — scores shown without those leagues. Try refresh.`);
   if (state.liveCount) {
     msgs.push(state.useLive
-      ? `<span class="live-text">⚽ ${state.liveCount} match${state.liveCount > 1 ? "es" : ""} in play</span> — points and rankings include live scores as they stand, and the page refreshes itself every minute.`
-      : `<span class="live-text">⚽ ${state.liveCount} match${state.liveCount > 1 ? "es" : ""} in play</span> — live scoring is off, so points update at full-time. Flip the Live scoring switch to project them now.`);
+      ? `<span class="live-text">⚽ Matches in play</span> — points and rankings include live scores as they stand, and the page refreshes itself every minute.`
+      : `<span class="live-text">⚽ Matches in play</span> — live scoring is off, so points update at full-time. Flip the Live scoring switch to project them now.`);
   }
   $("banner").innerHTML = msgs.join("<br>");
   $("banner").classList.toggle("show", msgs.length > 0);
