@@ -682,7 +682,7 @@ const state = { standings:{}, fixtures:{}, ownerMaps:{}, errors:[], notes:[], in
                 tab:"home", tableLeague:LEAGUE_ORDER[0], tableView:"short", weeks:[], matchWeek:0, matchPlayer:"all",
                 openMatch:null, detailTab:"events", detailData:null, matchItems:[],
                 teamsPlayer:"all", openTeam:null, openProfileMatch:null, profileDetailData:null,
-                profileTab:"overview", profileGames:null, profileMonth:null, homePlayer:"all" };
+                profileTab:"overview", profileGames:null, profileMonth:null, homePlayer:"all", profileOrigin:null };
 
 function seasonStrings() {
   const now = new Date();
@@ -860,8 +860,19 @@ async function loadFixtures(key) {
                  state: played ? "post" : "pre", clock: "", hs: played ? hs : null, as: played ? as : null });
     }
   }
-  out.sort((a, b) => a.date - b.date);
-  return out;
+  // Dedupe: ESPN's long-range scoreboard can return the same game twice, which
+  // double-counted "matches in play" (and would double-apply live points).
+  const seen = new Map();
+  const prio = { post: 3, in: 2, pre: 1 };
+  for (const f of out) {
+    const k = f.id != null ? `i${f.id}`
+      : `${norm(f.home || "")}|${norm(f.away || "")}|${f.date.toISOString().slice(0, 10)}`;
+    const prev = seen.get(k);
+    if (!prev || (prio[f.state] || 0) > (prio[prev.state] || 0)) seen.set(k, f);
+  }
+  const deduped = [...seen.values()];
+  deduped.sort((a, b) => a.date - b.date);
+  return deduped;
 }
 
 function nextFixtureFor(leagueKey, teamName) {
@@ -1526,7 +1537,7 @@ function renderTeamProfile() {
   const crest = row?.logo ? `<img class="prof-crest" src="${esc(row.logo)}" alt="" onerror="this.style.visibility='hidden'">` : `<span class="prof-crest crest placeholder"></span>`;
   const tabs = [["overview", "Overview"], ["pmatches", "Matches"], ["pstats", "Stats"]];
   wrap.innerHTML = `
-    <button class="prof-back">← All teams</button>
+    <button class="prof-back">← ${({ home: "Home", matches: "Matches", tables: "Leagues" })[state.profileOrigin] || "All teams"}</button>
     <div class="card prof-head">
       ${crest}
       <div class="prof-id">
@@ -1734,6 +1745,7 @@ $("leagueSelect").addEventListener("change", (e) => { state.tableLeague = e.targ
 $("teamPlayerSelect").innerHTML = `<option value="all">👥 Everyone</option>` + PLAYERS.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("");
 $("teamPlayerSelect").addEventListener("change", (e) => { state.teamsPlayer = e.target.value; state.openTeam = null; renderTeams(); });
 function openTeamProfile(team) {
+  state.profileOrigin = state.tab;                  // remember where we came from
   state.openTeam = team;
   state.openProfileMatch = null;
   state.profileDetailData = null;
@@ -1759,7 +1771,13 @@ $("teamsWrap").addEventListener("click", (e) => {
     window.scrollTo({ top: 0 });
     return;
   }
-  if (e.target.closest(".prof-back")) { state.openTeam = null; state.openProfileMatch = null; state.profileDetailData = null; state.profileGames = null; renderTeams(); return; }
+  if (e.target.closest(".prof-back")) {
+    const origin = state.profileOrigin || "teams";
+    state.openTeam = null; state.openProfileMatch = null; state.profileDetailData = null; state.profileGames = null;
+    state.profileOrigin = null;
+    if (origin !== "teams") showTab(origin); else renderTeams();
+    return;
+  }
   const card = e.target.closest(".team-card");
   if (card) { openTeamProfile(JSON.parse(card.dataset.team)); return; }
   const tb = e.target.closest(".team-block[data-team]");
