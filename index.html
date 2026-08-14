@@ -1346,7 +1346,7 @@ function fillHomeDetail() {
   const lg = String(state.openHomeMatch || "").split("|")[0] || null;
   const content = tab === "lineups" ? sectionLineups(json) : tab === "stats" ? sectionStats(json, lg) : sectionEvents(json);
   el.innerHTML = `<div class="dtabs">
-      ${[["events", "Events"], ["lineups", "Lineups"], ["stats", "Stats"]].map(([k, l]) =>
+      ${[["stats", "Stats"], ["lineups", "Lineups"], ["events", "Events"]].map(([k, l]) =>
         `<button class="dtab ${k === tab ? "active" : ""}" data-dtab="${k}">${l}</button>`).join("")}
     </div>
     <div class="dbody">${content}</div>`;
@@ -1972,7 +1972,7 @@ function renderDetail() {
   const tab = state.detailTab;
   const content = tab === "lineups" ? sectionLineups(json) : tab === "stats" ? sectionStats(json, String(state.openMatch || "").split("|")[0] || null) : sectionEvents(json);
   el.innerHTML = `<div class="dtabs">
-      ${[["events", "Events"], ["lineups", "Lineups"], ["stats", "Stats"]].map(([k, l]) =>
+      ${[["stats", "Stats"], ["lineups", "Lineups"], ["events", "Events"]].map(([k, l]) =>
         `<button class="dtab ${k === tab ? "active" : ""}" data-dtab="${k}">${l}</button>`).join("")}
     </div><div class="dbody">${content}</div>`;
 }
@@ -2364,7 +2364,7 @@ function fillProfileDetail() {
   const tab = state.detailTab;
   const content = tab === "lineups" ? sectionLineups(json) : tab === "stats" ? sectionStats(json, state.openTeam?.lg || null) : sectionEvents(json);
   el.innerHTML = `<div class="dtabs">
-      ${[["events", "Events"], ["lineups", "Lineups"], ["stats", "Stats"]].map(([k, l]) =>
+      ${[["stats", "Stats"], ["lineups", "Lineups"], ["events", "Events"]].map(([k, l]) =>
         `<button class="dtab ${k === tab ? "active" : ""}" data-dtab="${k}">${l}</button>`).join("")}
     </div><div class="dbody">${content}</div>`;
 }
@@ -2470,7 +2470,7 @@ function openTeamProfile(team) {
   state.profileGames = null;
   state.profileTab = "overview";
   state.profileMonth = null;
-  state.detailTab = "events";
+  state.detailTab = "stats";
   if (state.tab !== "teams") showTab("teams"); else renderTeams();
   window.scrollTo({ top: 0 });
 }
@@ -2505,7 +2505,7 @@ $("teamsWrap").addEventListener("click", (e) => {
   if (row) {
     const eid = row.dataset.eid;
     state.openProfileMatch = String(state.openProfileMatch) === String(eid) ? null : eid;
-    state.detailTab = "events"; state.profileDetailData = null;
+    state.detailTab = "stats"; state.profileDetailData = null;
     renderProfileTab();
     return;
   }
@@ -2539,7 +2539,7 @@ $("matchesWrap").addEventListener("click", (e) => {
   if (!row) return;
   const key = row.dataset.key;
   if (state.openMatch === key) { state.openMatch = null; }
-  else { state.openMatch = key; state.detailTab = "events"; state.detailData = null; }
+  else { state.openMatch = key; state.detailTab = "stats"; state.detailData = null; }
   renderMatches();
 });
 document.querySelectorAll("nav.tabs .tab").forEach(b => b.addEventListener("click", () => {
@@ -2575,7 +2575,7 @@ for (const id of ["watchWrap", "bigWrap"]) {
     if (!row) return;
     const key = row.dataset.key;
     if (state.openHomeMatch === key) { state.openHomeMatch = null; }
-    else { state.openHomeMatch = key; state.detailTab = "events"; state.homeDetailData = null; }
+    else { state.openHomeMatch = key; state.detailTab = "stats"; state.homeDetailData = null; }
     renderWatch();
     renderBig();
   });
