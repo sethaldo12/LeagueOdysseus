@@ -308,6 +308,48 @@
   .sb-away { background: var(--away-c); border-radius: 999px; }
   .empty-note { color: var(--muted); font-size: 13.5px; padding: 26px 14px; text-align: center; }
 
+  /* Teams tab */
+  .tg-head { display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 750;
+             margin: 4px 2px 10px; }
+  .tg-head + .teams-grid { margin-bottom: 18px; }
+  .tg-head .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .teams-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .team-card { padding: 12px 13px; cursor: pointer; }
+  .team-card:hover { background: var(--surface-2); }
+  .tc-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .tc-top .crest.tc { width: 26px; height: 26px; flex: none; margin: 0; }
+  .tc-name { font-weight: 700; font-size: 13px; line-height: 1.25; }
+  .tc-sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .tc-pts { font-size: 12px; font-weight: 650; margin-top: 5px; color: var(--ink-2); }
+  .prof-back { font: inherit; font-size: 13px; font-weight: 650; border: none; background: var(--surface);
+               box-shadow: var(--card-shadow); border-radius: 20px; padding: 8px 16px; cursor: pointer;
+               color: var(--ink); margin-bottom: 12px; }
+  .prof-back:hover { background: var(--surface-2); }
+  .prof-head { display: flex; align-items: center; gap: 14px; padding: 16px; margin-bottom: 12px; }
+  .prof-crest { width: 58px; height: 58px; object-fit: contain; flex: none; }
+  .prof-name { font-size: 18px; font-weight: 800; }
+  .prof-name .owner-tag { vertical-align: 3px; }
+  .prof-sub { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; }
+  .stat-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+  @media (max-width: 520px) { .stat-tiles { grid-template-columns: repeat(2, 1fr); } }
+  .st-tile { padding: 12px 8px; text-align: center; }
+  .st-val { font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; min-height: 26px; }
+  .st-lab { font-size: 10.5px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+  .fdot { display: inline-flex; align-items: center; justify-content: center; width: 21px; height: 21px;
+          border-radius: 50%; color: #fff; font-size: 10.5px; font-weight: 800; margin: 0 1px; }
+  .fW { background: #00a35c; } .fD { background: #9aa1a9; } .fL { background: #d23b3b; }
+  .fna { background: transparent; }
+  .sched-row { display: grid; grid-template-columns: 52px 1fr 24px auto; gap: 8px; align-items: center;
+               padding: 9px 14px; border-top: 1px solid var(--grid); font-size: 13px; }
+  .sched-row[data-eid] { cursor: pointer; }
+  .sched-row[data-eid]:hover { background: var(--surface-2); }
+  .sr-date { color: var(--muted); font-size: 11.5px; font-weight: 600; }
+  .sr-opp { min-width: 0; }
+  .sr-right { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  .sr-right b { color: var(--ink); }
+  #profSched .card { margin-bottom: 12px; }
+  #profSched .match-detail { padding: 11px 14px; border-top: 1px solid var(--grid); margin-top: 0; }
+
   /* Rules footer */
   details.rules { margin-top: 30px; color: var(--ink-2); font-size: 13.5px; }
   details.rules summary { cursor: pointer; font-weight: 600; color: var(--ink); }
@@ -340,6 +382,7 @@
 
   <nav class="tabs" role="tablist">
     <button class="tab active" data-tab="home" role="tab">Home</button>
+    <button class="tab" data-tab="teams" role="tab">Teams</button>
     <button class="tab" data-tab="tables" role="tab">League Tables</button>
     <button class="tab" data-tab="matches" role="tab">Match Hub</button>
   </nav>
@@ -371,6 +414,13 @@
       <summary>Scoring rules</summary>
       <div class="inner" id="rulesText"></div>
     </details>
+  </div>
+
+  <div id="view-teams" hidden>
+    <div class="controls">
+      <select id="teamPlayerSelect" aria-label="Choose player"></select>
+    </div>
+    <div id="teamsWrap"></div>
   </div>
 
   <div id="view-tables" hidden>
@@ -537,7 +587,8 @@ const ALIASES = {
 const $ = (id) => document.getElementById(id);
 const state = { standings:{}, fixtures:{}, ownerMaps:{}, errors:[], notes:[], includeRP:false, useLive:false, reqCache:{},
                 tab:"home", tableLeague:LEAGUE_ORDER[0], tableView:"short", weeks:[], matchWeek:0, matchPlayer:"all",
-                openMatch:null, detailTab:"events", detailData:null, matchItems:[] };
+                openMatch:null, detailTab:"events", detailData:null, matchItems:[],
+                teamsPlayer:"all", openTeam:null, openProfileMatch:null, profileDetailData:null };
 
 function seasonStrings() {
   const now = new Date();
@@ -604,6 +655,7 @@ function parseEspn(json) {
     for (const s of (e.stats || [])) stats[s.name] = (s.value !== undefined ? s.value : parseFloat(s.displayValue));
     return {
       name: e.team?.displayName || e.team?.name || "?",
+      espnId: e.team?.id || null,
       logo: e.team?.logos?.[0]?.href || null,
       rank: stats.rank ?? null,
       points: stats.points ?? 0,
@@ -1220,13 +1272,202 @@ function sectionStats(json) {
   return `<div class="stats-wrap">${head}${rows}</div>`;
 }
 
+// --- Teams tab ----------------------------------------------------
+function teamRowFor(lg, teamName) {
+  const rows = tableFor(lg);
+  return rows ? matchTeam(rows, teamName) : null;
+}
+
+function renderTeams() {
+  if (state.openTeam) return renderTeamProfile();
+  const wrap = $("teamsWrap");
+  const players = state.teamsPlayer === "all" ? PLAYERS : PLAYERS.filter(p => p.name === state.teamsPlayer);
+  wrap.innerHTML = players.map(p => {
+    const cards = LEAGUE_ORDER.map(lg => {
+      const teamName = p.teams[lg];
+      const row = teamRowFor(lg, teamName);
+      const weight = WEIGHTS[`${lg}|${teamName}`] ?? 100;
+      const crest = row?.logo ? `<img class="crest tc" src="${esc(row.logo)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="crest placeholder tc"></span>`;
+      const data = esc(JSON.stringify({ player: p.name, lg, teamName }));
+      return `<div class="card team-card" data-team="${data}">
+        <div class="tc-top">${crest}<span class="tc-name">${esc(teamName)}</span></div>
+        <div class="tc-sub">${LEAGUES[lg].flag} ${esc(lg)}${row ? ` <span class="pos-chip">${ordinal(row.rank)}</span>` : ""}${row?.live ? ` <span class="live-chip">⚽ ${esc(row.live.clock)}</span>` : ""}</div>
+        <div class="tc-pts">${row ? `${row.points} pts · ${fmt(row.points * weight / 100)} wtd` : "no data"}</div>
+      </div>`;
+    }).join("");
+    return `<div class="tg-head"><span class="dot" style="background:${accent(p)}"></span>${esc(p.name)}'s teams</div>
+      <div class="teams-grid">${cards}</div>`;
+  }).join("");
+}
+
+async function loadTeamSchedule(lg, teamName) {
+  const cfg = LEAGUES[lg];
+  const games = [];
+  if (cfg.source.espn) {
+    const row = (state.standings[lg] || []).length ? matchTeam(state.standings[lg], teamName) : null;
+    if (!row || !row.espnId) return null;
+    const json = await fetchJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${cfg.source.espn}/teams/${row.espnId}/schedule`);
+    for (const ev of (json?.events || [])) {
+      const comp = ev?.competitions?.[0];
+      const comps = comp?.competitors || [];
+      const home = comps.find(c => c.homeAway === "home"), away = comps.find(c => c.homeAway === "away");
+      if (!home || !away || !ev.date) continue;
+      const sc = (c) => { const v = c?.score; return nint(v && v.displayValue !== undefined ? v.displayValue : v); };
+      const st = comp?.status?.type?.state || ev?.status?.type?.state || "pre";
+      const isHome = matchTeam([{ name: home.team?.displayName || "" }], teamName) != null;
+      const opp = isHome ? away : home;
+      games.push({ id: ev.id || null, date: new Date(ev.date), state: st,
+                   hs: sc(home), as: sc(away), isHome,
+                   opp: opp.team?.shortDisplayName || opp.team?.displayName || "?" });
+    }
+  } else {
+    const json = await fetchJSON(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${cfg.source.tsdb}&s=${SEASON.tsdb}`);
+    const n = norm(teamName);
+    const hit = (x) => { const v = norm(x || ""); return v === n || v.includes(n) || n.includes(v); };
+    for (const ev of (json?.events || [])) {
+      if (!hit(ev.strHomeTeam) && !hit(ev.strAwayTeam)) continue;
+      const when = ev.strTimestamp ? new Date(ev.strTimestamp) :
+                   ev.dateEvent ? new Date(`${ev.dateEvent}T${ev.strTime || "12:00:00"}`) : null;
+      if (!when || isNaN(+when)) continue;
+      const hs = nint(ev.intHomeScore), as = nint(ev.intAwayScore);
+      const isHome = hit(ev.strHomeTeam);
+      games.push({ id: null, date: when, state: (hs != null && as != null) ? "post" : "pre",
+                   hs, as, isHome, opp: isHome ? ev.strAwayTeam : ev.strHomeTeam });
+    }
+  }
+  games.sort((a, b) => a.date - b.date);
+  return games;
+}
+
+function deriveTeamStats(games) {
+  const played = games.filter(g => g.state === "post" && g.hs != null && g.as != null);
+  let w = 0, d = 0, l = 0, gf = 0, ga = 0, cs = 0, biggest = null;
+  const form = [];
+  for (const g of played) {
+    const mine = g.isHome ? g.hs : g.as, theirs = g.isHome ? g.as : g.hs;
+    gf += mine; ga += theirs;
+    if (theirs === 0) cs++;
+    const r = mine > theirs ? "W" : mine === theirs ? "D" : "L";
+    if (r === "W") w++; else if (r === "D") d++; else l++;
+    form.push(r);
+    if (r === "W" && (!biggest || (mine - theirs) > biggest.margin))
+      biggest = { margin: mine - theirs, txt: `${mine}–${theirs} ${g.isHome ? "vs" : "@"} ${g.opp}` };
+  }
+  return { w, d, l, gf, ga, gd: gf - ga, cs, biggest, form: form.slice(-5), played: played.length };
+}
+
+function renderTeamProfile() {
+  const wrap = $("teamsWrap");
+  const { player, lg, teamName } = state.openTeam;
+  const p = PLAYERS.find(x => x.name === player);
+  const row = teamRowFor(lg, teamName);
+  const weight = WEIGHTS[`${lg}|${teamName}`] ?? 100;
+  const crest = row?.logo ? `<img class="prof-crest" src="${esc(row.logo)}" alt="" onerror="this.style.visibility='hidden'">` : `<span class="prof-crest crest placeholder"></span>`;
+  wrap.innerHTML = `
+    <button class="prof-back">← All teams</button>
+    <div class="card prof-head">
+      ${crest}
+      <div class="prof-id">
+        <div class="prof-name">${esc(teamName)}${p ? ownerTag(p) : ""}</div>
+        <div class="prof-sub">${LEAGUES[lg].flag} ${esc(lg)}${row ? ` · ${ordinal(row.rank)}` : ""}${row?.live ? ` · <span class="live-chip">⚽ ${esc(row.live.clock)} ${row.live.score}</span>` : ""} · weight ${weight}%</div>
+      </div>
+    </div>
+    <div class="stat-tiles">
+      <div class="card st-tile"><div class="st-val">${row ? row.points : "—"}</div><div class="st-lab">League pts</div></div>
+      <div class="card st-tile"><div class="st-val">${row ? fmt(row.points * weight / 100) : "—"}</div><div class="st-lab">Weighted pts</div></div>
+      <div class="card st-tile" id="tileRecord"><div class="st-val">…</div><div class="st-lab">Record</div></div>
+      <div class="card st-tile" id="tileGD"><div class="st-val">${row && row.gd != null ? (row.gd > 0 ? "+" : "") + row.gd : "…"}</div><div class="st-lab">Goal diff</div></div>
+      <div class="card st-tile" id="tileForm"><div class="st-val">…</div><div class="st-lab">Form</div></div>
+      <div class="card st-tile" id="tileExtra"><div class="st-val">…</div><div class="st-lab">Clean sheets</div></div>
+    </div>
+    <div id="profSched"><div class="card"><div class="empty-note">Loading schedule…</div></div></div>`;
+  loadTeamProfileData();
+}
+
+async function loadTeamProfileData() {
+  const { lg, teamName } = state.openTeam;
+  let games = null;
+  try { games = await loadTeamSchedule(lg, teamName); } catch (e) { games = null; }
+  if (!state.openTeam || state.openTeam.teamName !== teamName) return;   // navigated away
+  const el = $("profSched");
+  if (!el) return;
+  if (!games || !games.length) {
+    el.innerHTML = `<div class="card"><div class="empty-note">Schedule isn't available for this team.</div></div>`;
+    const rec = document.getElementById("tileRecord"); if (rec) rec.querySelector(".st-val").textContent = "—";
+    const fm = document.getElementById("tileForm"); if (fm) fm.querySelector(".st-val").textContent = "—";
+    const ex = document.getElementById("tileExtra"); if (ex) ex.querySelector(".st-val").textContent = "—";
+    return;
+  }
+  const st = deriveTeamStats(games);
+  const set = (id, html) => { const t = document.getElementById(id); if (t) t.querySelector(".st-val").innerHTML = html; };
+  set("tileRecord", `${st.w}-${st.d}-${st.l}`);
+  const gdTile = document.getElementById("tileGD");
+  if (gdTile) gdTile.querySelector(".st-val").textContent = (st.gd > 0 ? "+" : "") + st.gd;
+  set("tileForm", st.form.length ? st.form.map(r => `<span class="fdot f${r}">${r}</span>`).join("") : "—");
+  set("tileExtra", String(st.cs));
+  const bigTile = document.getElementById("tileExtra");
+  if (bigTile && st.biggest) bigTile.querySelector(".st-lab").innerHTML = `Clean sheets · <b>best win ${esc(st.biggest.txt)}</b>`;
+
+  const upcoming = games.filter(g => g.state !== "post").sort((a, b) => a.date - b.date);
+  const results = games.filter(g => g.state === "post").sort((a, b) => b.date - a.date);
+  const rowHtml = (g) => {
+    const dt = g.date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const live = g.state === "in";
+    const done = g.state === "post" && g.hs != null;
+    const mine = g.isHome ? g.hs : g.as, theirs = g.isHome ? g.as : g.hs;
+    const res = done ? (mine > theirs ? "W" : mine === theirs ? "D" : "L") : null;
+    const right = done ? `<b>${g.hs} – ${g.as}</b>` :
+                  live ? `<span class="live-text">LIVE</span>` :
+                  g.date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return `<div class="sched-row" ${done && g.id ? `data-eid="${esc(g.id)}"` : ""}>
+      <span class="sr-date">${dt}</span>
+      <span class="sr-opp">${g.isHome ? "vs" : "@"} ${esc(g.opp)}</span>
+      ${res ? `<span class="fdot f${res}">${res}</span>` : `<span class="fdot fna"></span>`}
+      <span class="sr-right">${right}</span>
+    </div>${state.openProfileMatch && String(state.openProfileMatch) === String(g.id) ? `<div class="match-detail" id="profDetail"><div class="empty-note">Loading match details…</div></div>` : ""}`;
+  };
+  el.innerHTML = `
+    ${upcoming.length ? `<div class="card"><div class="match-day">Upcoming</div>${upcoming.map(rowHtml).join("")}</div>` : ""}
+    ${results.length ? `<div class="card"><div class="match-day">Results</div>${results.map(rowHtml).join("")}</div>` : ""}`;
+  if (state.openProfileMatch) loadProfileDetail();
+}
+
+async function loadProfileDetail() {
+  const el = document.getElementById("profDetail");
+  if (!el) return;
+  const { lg } = state.openTeam || {};
+  const cfg = lg && LEAGUES[lg];
+  if (!cfg || !cfg.source.espn) { el.innerHTML = `<div class="empty-note">Match details aren't available for this league.</div>`; return; }
+  try {
+    const json = await fetchJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${cfg.source.espn}/summary?event=${state.openProfileMatch}`);
+    state.profileDetailData = { id: state.openProfileMatch, json };
+    fillProfileDetail();
+  } catch (e) {
+    el.innerHTML = `<div class="empty-note">Couldn't load match details — try again in a moment.</div>`;
+  }
+}
+
+function fillProfileDetail() {
+  const el = document.getElementById("profDetail");
+  if (!el || !state.profileDetailData) return;
+  const json = state.profileDetailData.json;
+  const tab = state.detailTab;
+  const content = tab === "lineups" ? sectionLineups(json) : tab === "stats" ? sectionStats(json) : sectionEvents(json);
+  el.innerHTML = `<div class="dtabs">
+      ${[["events", "Events"], ["lineups", "Lineups"], ["stats", "Stats"]].map(([k, l]) =>
+        `<button class="dtab ${k === tab ? "active" : ""}" data-dtab="${k}">${l}</button>`).join("")}
+    </div><div class="dbody">${content}</div>`;
+}
+
 // --- Tabs ---------------------------------------------------------
 function showTab(tab) {
   state.tab = tab;
   document.querySelectorAll("nav.tabs .tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   $("view-home").hidden = tab !== "home";
+  $("view-teams").hidden = tab !== "teams";
   $("view-tables").hidden = tab !== "tables";
   $("view-matches").hidden = tab !== "matches";
+  if (tab === "teams") renderTeams();
   if (tab === "tables") renderTables();
   if (tab === "matches") renderMatches();
 }
@@ -1290,6 +1531,7 @@ async function loadAll() {
   render();
   renderTables();
   renderMatches();
+  if (state.tab === "teams") renderTeams();
   clearTimeout(state.liveTimer);
   if (state.liveCount) state.liveTimer = setTimeout(loadAll, 60000);   // live scoreboard mode
 }
@@ -1297,6 +1539,24 @@ async function loadAll() {
 $("seasonTag").textContent = SEASON.label + " season";
 $("leagueSelect").innerHTML = LEAGUE_ORDER.map(lg => `<option value="${esc(lg)}">${LEAGUES[lg].flag} ${esc(lg)}</option>`).join("");
 $("leagueSelect").addEventListener("change", (e) => { state.tableLeague = e.target.value; renderTables(); });
+$("teamPlayerSelect").innerHTML = `<option value="all">👥 Everyone</option>` + PLAYERS.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("");
+$("teamPlayerSelect").addEventListener("change", (e) => { state.teamsPlayer = e.target.value; state.openTeam = null; renderTeams(); });
+$("teamsWrap").addEventListener("click", (e) => {
+  const tabBtn = e.target.closest(".dtab");
+  if (tabBtn) { state.detailTab = tabBtn.dataset.dtab; fillProfileDetail(); return; }
+  if (e.target.closest(".match-detail")) return;
+  if (e.target.closest(".prof-back")) { state.openTeam = null; state.openProfileMatch = null; state.profileDetailData = null; renderTeams(); return; }
+  const card = e.target.closest(".team-card");
+  if (card) { state.openTeam = JSON.parse(card.dataset.team); state.openProfileMatch = null; state.profileDetailData = null; state.detailTab = "events"; renderTeams(); return; }
+  const row = e.target.closest(".sched-row[data-eid]");
+  if (row) {
+    const eid = row.dataset.eid;
+    state.openProfileMatch = String(state.openProfileMatch) === String(eid) ? null : eid;
+    state.detailTab = "events"; state.profileDetailData = null;
+    loadTeamProfileData();
+    return;
+  }
+});
 $("tableViewSeg").addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
