@@ -556,6 +556,29 @@
       <summary>Scoring rules</summary>
       <div class="inner" id="rulesText"></div>
     </details>
+    <details class="rules" id="badgeRules">
+      <summary>Badge explanations</summary>
+      <div class="inner">
+        <p>Badges sit next to player names on the Home table, the League tab, and player profiles.
+           Weekly badges cover Monday through Sunday of the current week (or last week until this
+           week's first game is played). <b>Every badge belongs to exactly one player</b> — nothing is
+           ever shared, and nobody gets a weekly badge for a category at zero.</p>
+        <p>🏆 <b>League leader</b> — currently top of the League Odysseus table.</p>
+        <p>🟥 <b>Card collector</b> — most red cards picked up by their teams this week. A tie means
+           nobody gets it. (Liga Portugal 2 games can't contribute — that feed has no card data.)</p>
+        <p>⚽ <b>Golden boots</b> — most goals scored by their teams this week. Tie → nobody.</p>
+        <p>🧤 <b>Safe hands</b> — most clean sheets kept by their teams this week. Tie → nobody.</p>
+        <p>🔥 <b>On fire</b> — most wins by their teams this week.</p>
+        <p>🚀 <b>Big mover</b> — biggest weighted-points gain this week. 🔥 and 🚀 are never worn by
+           the same player: if one player tops both, they keep 🔥 and the rocket stays grounded. If
+           two players tie for most wins, the one who gained more points takes 🚀 and the other keeps
+           🔥 — still tied, and neither badge is given.</p>
+        <p>💩 <b>Rough week</b> — most losses by their teams this week.</p>
+        <p>🥶 <b>Ice cold</b> — only appears when two players tie for most losses: the one whose teams
+           scored fewer goals goes ice cold, and the other keeps 💩. Tied on goals as well → both are
+           spared, and neither badge is given.</p>
+      </div>
+    </details>
     </div>
     <div id="playerProfile" hidden></div>
   </div>
@@ -1462,17 +1485,23 @@ async function redCardsFor(lg, eid) {
   return out;
 }
 
-// weekly badges: 🏆 leader · 🟥 most red cards · ⚽ most goals · 🔥 most wins · 💩 most losses
+// weekly badges — every badge goes to at most ONE player, never shared:
+// 🟥 most red cards · ⚽ most goals · 🧤 most clean sheets (ties → nobody)
+// 🔥 most wins / 🚀 biggest points gain — partners, one player never wears both;
+//   a 🔥 tie is split by points gained (better mover takes 🚀, other keeps 🔥)
+// 💩 most losses / 🥶 — partners; a 💩 tie is split by goals (fewest takes 🥶)
 async function computeBadges() {
   const games = state.raceGames || [];
   const { range } = weeklyWindow(state.raceEvents || []);
   const inWin = games.filter(g => g.t >= range[0] && g.t < range[1]);
-  const agg = PLAYERS.map(() => ({ w: 0, l: 0, gf: 0, red: 0 }));
+  const agg = PLAYERS.map(() => ({ w: 0, l: 0, gf: 0, red: 0, cs: 0, pts: 0 }));
   for (const g of inWin) {
     const a = agg[g.p];
     a.gf += g.gf;
+    if (g.ga === 0) a.cs++;
     if (g.gf > g.ga) a.w++; else if (g.gf < g.ga) a.l++;
   }
+  for (const e of (state.raceEvents || [])) if (e.t >= range[0] && e.t < range[1]) agg[e.p].pts += e.d;
   const eids = [...new Map(inWin.filter(g => g.eid != null).map(g => [`${g.lg}|${g.eid}`, g])).keys()];
   await Promise.all(eids.map(async (ke) => {
     const [lg, eid] = ke.split("|");
@@ -1486,22 +1515,66 @@ async function computeBadges() {
       }
     }
   }));
-  const maxBy = (k) => {
-    const mx = Math.max(...agg.map(a => a[k]));
-    return mx > 0 ? PLAYERS.filter((_, i) => agg[i][k] === mx).map(p => p.name) : [];
+  // unique extreme or nobody
+  const soleMax = (k, idxs) => {
+    const pool = idxs || agg.map((_, i) => i);
+    const mx = Math.max(...pool.map(i => agg[i][k]));
+    if (mx <= 0) return null;
+    const hits = pool.filter(i => agg[i][k] === mx);
+    return hits.length === 1 ? hits[0] : null;
   };
-  state.badges = { red: maxBy("red"), ball: maxBy("gf"), fire: maxBy("w"), poop: maxBy("l") };
+  const soleMin = (k, idxs) => {
+    const mn = Math.min(...idxs.map(i => agg[i][k]));
+    const hits = idxs.filter(i => agg[i][k] === mn);
+    return hits.length === 1 ? hits[0] : null;
+  };
+  const b = { red: soleMax("red"), ball: soleMax("gf"), glove: soleMax("cs"),
+              fire: null, rocket: null, poop: null, ice: null };
+  // 🔥 / 🚀
+  const maxW = Math.max(...agg.map(a => a.w));
+  const fireTied = maxW > 0 ? agg.map((a, i) => a.w === maxW ? i : -1).filter(i => i >= 0) : [];
+  if (fireTied.length === 1) {
+    b.fire = fireTied[0];
+    const mover = soleMax("pts");
+    if (mover != null && mover !== b.fire) b.rocket = mover;   // same person → 🔥 only
+  } else if (fireTied.length > 1) {
+    const mover = soleMax("pts", fireTied);
+    if (mover != null) {
+      b.rocket = mover;
+      const rest = fireTied.filter(i => i !== mover);
+      if (rest.length === 1) b.fire = rest[0];
+    }
+  } else {
+    b.rocket = soleMax("pts");
+  }
+  // 💩 / 🥶
+  const maxL = Math.max(...agg.map(a => a.l));
+  const poopTied = maxL > 0 ? agg.map((a, i) => a.l === maxL ? i : -1).filter(i => i >= 0) : [];
+  if (poopTied.length === 1) b.poop = poopTied[0];
+  else if (poopTied.length > 1) {
+    const cold = soleMin("gf", poopTied);
+    if (cold != null) {
+      b.ice = cold;
+      const rest = poopTied.filter(i => i !== cold);
+      if (rest.length === 1) b.poop = rest[0];
+    }
+  }
+  const nameOf = (i) => i == null ? null : PLAYERS[i].name;
+  state.badges = Object.fromEntries(Object.entries(b).map(([k, v]) => [k, nameOf(v)]));
 }
 
 function badgesFor(name) {
   const b = state.badges || {};
   let out = "";
   if (state.leaderName === name) out += "🏆";
-  if ((b.red || []).includes(name)) out += "🟥";
-  if ((b.ball || []).includes(name)) out += "⚽";
-  if ((b.fire || []).includes(name)) out += "🔥";
-  if ((b.poop || []).includes(name)) out += "💩";
-  return out ? `<span class="pbadges" title="🏆 league leader · 🟥 most red cards this week · ⚽ most goals this week · 🔥 most wins this week · 💩 most losses this week">${out}</span>` : "";
+  if (b.red === name) out += "🟥";
+  if (b.ball === name) out += "⚽";
+  if (b.glove === name) out += "🧤";
+  if (b.fire === name) out += "🔥";
+  if (b.rocket === name) out += "🚀";
+  if (b.poop === name) out += "💩";
+  if (b.ice === name) out += "🥶";
+  return out ? `<span class="pbadges" title="See “Badge explanations” on the Home tab">${out}</span>` : "";
 }
 
 function renderRecap() {
