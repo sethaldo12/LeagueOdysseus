@@ -895,6 +895,15 @@ function nextFixtureFor(leagueKey, teamName) {
 }
 
 // --- Live projection ---------------------------------------------
+// A fixture is genuinely live only if the feed says so AND the kickoff time has
+// actually passed (ESPN sometimes flags future games "in" with stuck clocks) AND
+// it isn't absurdly old (abandoned games can stay "in" for days).
+function isLiveFx(f) {
+  if (f.state !== "in" || f.hs == null || f.as == null) return false;
+  const since = Date.now() - +f.date;               // ms since kickoff
+  return since > -15 * 60000 && since < 4.5 * 3600000;
+}
+
 // While games are in play, fold the current scorelines into each league table
 // (win = +3, draw = +1, plus goal difference), re-rank, and score off THAT.
 function applyLive() {
@@ -902,7 +911,7 @@ function applyLive() {
   for (const lg of LEAGUE_ORDER) {
     const rows = state.standings[lg];
     if (rows) rows.forEach(r => { r.live = null; });
-    const liveFx = (state.fixtures[lg] || []).filter(f => f.state === "in" && f.hs != null && f.as != null);
+    const liveFx = (state.fixtures[lg] || []).filter(isLiveFx);
     state.live[lg] = liveFx;
     if (!rows || !liveFx.length) { state.provisional[lg] = rows; continue; }
     state.liveCount += liveFx.length;
@@ -1212,7 +1221,7 @@ function buildMatchRow(lg, f, opts) {
       ${(rank || owner) ? `<div class="tb-sub">${rank ? `<span class="pos-chip">${ordinal(rank)}</span>` : ""}${owner ? ownerTag(owner) : ""}</div>` : ""}
     </div>`;
   };
-  const isLive = f.state === "in" && f.hs != null;
+  const isLive = isLiveFx(f);
   const isFT = f.state === "post" && f.hs != null;
   const status = isLive ? `<span class="ms ms-live">${esc(f.clock || "")}</span>`
                : isFT ? `<span class="ms ms-ft">FT</span>`
@@ -1568,7 +1577,7 @@ function renderProfileTab() {
       : `<div class="nm-row">
            <span class="nm-date">${next.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</span>
            <span class="nm-opp">${next.isHome ? "vs" : "@"} <b>${esc(next.opp)}</b></span>
-           <span class="nm-time">${next.state === "in" ? `<span class="live-text">LIVE ${esc(next.clock || "")}</span>` : next.date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</span>
+           <span class="nm-time">${isLiveFx(next) ? `<span class="live-text">LIVE ${esc(next.clock || "")}</span>` : next.date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</span>
          </div>`;
     el.innerHTML = `
       <div class="card nm-card"><div class="match-day">Next match</div>${nextHtml}</div>
