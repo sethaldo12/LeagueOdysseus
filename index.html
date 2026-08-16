@@ -383,6 +383,8 @@
   .togglebar.tg-inline { margin: 2px 2px 16px; }
 
   /* News tab */
+  .today-tag { color: #b8912b; font-weight: 800; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .today-tag { color: #d4af37; } }
   .nw-hero { overflow: hidden; margin-bottom: 14px; cursor: pointer; }
   .nw-hero:hover { background: var(--surface-2); }
   .nw-hero-img { aspect-ratio: 16 / 9; overflow: hidden; background: var(--chip-bg); }
@@ -1010,7 +1012,7 @@ function isLiveFx(f) {
 // While games are in play, fold the current scorelines into each league table
 // (win = +3, draw = +1, plus goal difference), re-rank, and score off THAT.
 function applyLive() {
-  state.live = {}; state.provisional = {}; state.liveCount = 0;
+  state.live = {}; state.provisional = {}; state.liveCount = 0; state.liveOwnedCount = 0;
   for (const lg of LEAGUE_ORDER) {
     const rows = state.standings[lg];
     if (rows) rows.forEach(r => { r.live = null; });
@@ -1018,6 +1020,7 @@ function applyLive() {
     state.live[lg] = liveFx;
     if (!rows || !liveFx.length) { state.provisional[lg] = rows; continue; }
     state.liveCount += liveFx.length;
+    state.liveOwnedCount += liveFx.filter(f => draftedOwnerIdx(lg, f.home) != null || draftedOwnerIdx(lg, f.away) != null).length;
     const clone = rows.map(r => ({ ...r, baseRank: r.rank, live: null }));
     for (const f of liveFx) {
       const hPts = f.hs > f.as ? 3 : f.hs === f.as ? 1 : 0;
@@ -1853,11 +1856,21 @@ function renderMatches() {
   const groups = [];
   for (const it of items) {
     const dayKey = it.f.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
-    if (!groups.length || groups[groups.length - 1].day !== dayKey) groups.push({ day: dayKey, items: [] });
+    if (!groups.length || groups[groups.length - 1].day !== dayKey) {
+      const d = it.f.date;
+      groups.push({ day: dayKey, date: +new Date(d.getFullYear(), d.getMonth(), d.getDate()), items: [] });
+    }
     groups[groups.length - 1].items.push(it);
   }
+  // today's card first (live games on top inside it), then upcoming days, then past days
+  const now = new Date();
+  const todayKey = +new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const bucket = (g) => g.date === todayKey ? 0 : g.date > todayKey ? 1 : 2;
+  groups.sort((a, b) => bucket(a) - bucket(b) || (bucket(a) === 2 ? b.date - a.date : a.date - b.date));
+  for (const g of groups) if (g.date === todayKey)
+    g.items.sort((a, b) => (isLiveFx(b.f) ? 1 : 0) - (isLiveFx(a.f) ? 1 : 0) || a.f.date - b.f.date);
   wrap.innerHTML = groups.map(g => `<div class="card day-card">
-    <div class="match-day">${g.day}</div>
+    <div class="match-day">${g.date === todayKey ? `<span class="today-tag">Today</span> · ${g.day}` : g.day}</div>
     ${g.items.map(renderRow).join("")}
   </div>`).join("");
   if (state.openMatch) {
@@ -2523,7 +2536,7 @@ function renderRules() {
 function updateBanner() {
   const msgs = [];
   if (state.errors.length) msgs.push(`⚠️ Couldn't load: ${state.errors.join(", ")} — scores shown without those leagues. Try refresh.`);
-  if (state.liveCount) {
+  if (state.liveOwnedCount) {
     msgs.push(state.useLive
       ? `<span class="live-text">⚽ Matches in play</span> — points and rankings include live scores as they stand, and the page refreshes itself every minute.`
       : `<span class="live-text">⚽ Matches in play</span> — live scoring is off, so points update at full-time. Flip the Live scoring switch to project them now.`);
