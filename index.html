@@ -905,6 +905,35 @@ function tableFromEvents(json) {
   return rows;
 }
 
+// TheSportsDB occasionally serves 503s (shared free tier) — retry once with a
+// pause, and keep the last good payload per URL so an outage shows slightly
+// stale data instead of an error.
+async function tsdbFetch(url) {
+  const cacheKey = `loTSDB.${url.replace(/[^a-z0-9]+/gi, ".")}.v1`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const json = await fetchJSON(url + (attempt ? `&retry=${attempt}` : ""));
+      if (json != null) {
+        try { localStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), json })); } catch {}
+        return json;
+      }
+      return json;                                   // empty body = valid "no data" answer
+    } catch (e) {
+      if (attempt === 0) await new Promise(r => setTimeout(r, 1200));
+      else {
+        let hit = null;
+        try { hit = JSON.parse(localStorage.getItem(cacheKey)); } catch {}
+        if (hit?.json) {
+          const when = new Date(hit.t).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+          state.tsdbStale = when;                    // surfaced as a note, not an error
+          return hit.json;
+        }
+        throw e;
+      }
+    }
+  }
+}
+
 async function loadLeague(key) {
   const cfg = LEAGUES[key];
   if (cfg.source.espn) {
@@ -916,16 +945,16 @@ async function loadLeague(key) {
     const id = cfg.source.tsdb;
     const tableUrl = (s) => `https://www.thesportsdb.com/api/v1/json/123/lookuptable.php?l=${id}&s=${s}`;
     let rows = [];
-    try { rows = parseTsdb(await fetchJSON(tableUrl(SEASON.tsdb))); } catch (e) { /* fall through */ }
+    try { rows = parseTsdb(await tsdbFetch(tableUrl(SEASON.tsdb))); } catch (e) { /* fall through */ }
     if (!rows.length) {
       // no official table yet — compute standings from this season's match results
       try {
-        rows = tableFromEvents(await fetchJSON(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${id}&s=${SEASON.tsdb}`));
+        rows = tableFromEvents(await tsdbFetch(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${id}&s=${SEASON.tsdb}`));
         if (rows.length) state.notes.push(`${key}: official table not published yet — standings computed live from match results.`);
       } catch (e) { /* fall through */ }
     }
     if (!rows.length) {
-      rows = parseTsdb(await fetchJSON(tableUrl(SEASON.tsdbPrev)));
+      rows = parseTsdb(await tsdbFetch(tableUrl(SEASON.tsdbPrev)));
       if (rows.length) state.notes.push(`${key}: new season data not available yet — showing last season for now.`);
     }
     if (!rows.length) throw new Error("empty table");
@@ -954,7 +983,7 @@ async function loadFixtures(key) {
                  hs: nint(home.score), as: nint(away.score) });
     }
   } else {
-    const json = await fetchJSON(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${cfg.source.tsdb}&s=${SEASON.tsdb}`);
+    const json = await tsdbFetch(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${cfg.source.tsdb}&s=${SEASON.tsdb}`);
     for (const ev of (json?.events || [])) {
       const hs = parseInt(ev.intHomeScore, 10), as = parseInt(ev.intAwayScore, 10);
       const played = !isNaN(hs) && !isNaN(as);
@@ -2301,7 +2330,7 @@ async function loadTeamSchedule(lg, teamName) {
     games.sort((a, b) => a.date - b.date);
     return games;
   } else {
-    const json = await fetchJSON(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${cfg.source.tsdb}&s=${SEASON.tsdb}`);
+    const json = await tsdbFetch(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${cfg.source.tsdb}&s=${SEASON.tsdb}`);
     const n = norm(teamName);
     const hit = (x) => { const v = norm(x || ""); return v === n || v.includes(n) || n.includes(v); };
     for (const ev of (json?.events || [])) {
@@ -2536,6 +2565,7 @@ function renderRules() {
 function updateBanner() {
   const msgs = [];
   if (state.errors.length) msgs.push(`⚠️ Couldn't load: ${state.errors.join(", ")} — scores shown without those leagues. Try refresh.`);
+  if (state.tsdbStale) msgs.push(`Liga Portugal 2's feed is down — showing its data from ${state.tsdbStale}. Everything else is live.`);
   if (state.liveOwnedCount) {
     msgs.push(state.useLive
       ? `<span class="live-text">⚽ Matches in play</span> — points and rankings include live scores as they stand, and the page refreshes itself every minute.`
@@ -2548,7 +2578,7 @@ function updateBanner() {
 async function loadAll() {
   $("loading").style.display = "block";
   $("banner").classList.remove("show");
-  state.errors = []; state.notes = [];
+  state.errors = []; state.notes = []; state.tsdbStale = null;
   state.reqCache = {};
   await Promise.all(LEAGUE_ORDER.flatMap((key) => [
     (async () => {
