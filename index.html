@@ -905,6 +905,30 @@ function tableFromEvents(json) {
   return rows;
 }
 
+// Last-resort bundled snapshot for Liga Portugal 2: used only when the live feed
+// AND this browser's saved copy are both unavailable (e.g. a first visit during a
+// TheSportsDB outage). Season-start baseline — refresh it occasionally.
+const TSDB_SNAPSHOT = {
+  "Liga Portugal 2": { asOf: "season start", rows: [
+    { name:"Academica", rank:1, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Amarante", rank:2, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Benfica B", rank:3, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Chaves", rank:4, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Farense", rank:5, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Feirense", rank:6, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Felgueiras", rank:7, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Leixões", rank:8, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Lusitânia Lourosa", rank:9, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Penafiel", rank:10, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Portimonense", rank:11, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Porto B", rank:12, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Sporting CP B", rank:13, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Torreense", rank:14, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"União de Leiria", rank:15, points:0, played:0, w:0, d:0, l:0, gd:0 },
+    { name:"Vizela", rank:16, points:0, played:0, w:0, d:0, l:0, gd:0 }
+  ] }
+};
+
 // TheSportsDB occasionally serves 503s (shared free tier) — retry once with a
 // pause, and keep the last good payload per URL so an outage shows slightly
 // stale data instead of an error.
@@ -954,8 +978,15 @@ async function loadLeague(key) {
       } catch (e) { /* fall through */ }
     }
     if (!rows.length) {
-      rows = parseTsdb(await tsdbFetch(tableUrl(SEASON.tsdbPrev)));
-      if (rows.length) state.notes.push(`${key}: new season data not available yet — showing last season for now.`);
+      try {
+        rows = parseTsdb(await tsdbFetch(tableUrl(SEASON.tsdbPrev)));
+        if (rows.length) state.notes.push(`${key}: new season data not available yet — showing last season for now.`);
+      } catch (e) { /* fall through to the bundled snapshot */ }
+    }
+    if (!rows.length && TSDB_SNAPSHOT[key]) {
+      rows = TSDB_SNAPSHOT[key].rows.map(r => ({ ...r }));
+      state.tsdbSnapshot = { ...(state.tsdbSnapshot || {}), [key]: true };
+      if (!state.tsdbStale) state.tsdbStale = `the app's built-in snapshot (${TSDB_SNAPSHOT[key].asOf})`;
     }
     if (!rows.length) throw new Error("empty table");
     return rows;
@@ -1080,6 +1111,7 @@ function tableFor(lg) { return (state.useLive && state.provisional?.[lg]) || sta
 
 // --- Scoring -----------------------------------------------------
 function liveRewards(leagueKey, row, tableSize) {
+  if (state.tsdbSnapshot?.[leagueKey]) return [];   // placeholder order — no reward tags
   const r = LEAGUES[leagueKey].rules;
   const out = [];   // {label, pts}
   if (row.rank === 1) {
@@ -2578,7 +2610,7 @@ function updateBanner() {
 async function loadAll() {
   $("loading").style.display = "block";
   $("banner").classList.remove("show");
-  state.errors = []; state.notes = []; state.tsdbStale = null;
+  state.errors = []; state.notes = []; state.tsdbStale = null; state.tsdbSnapshot = null;
   state.reqCache = {};
   await Promise.all(LEAGUE_ORDER.flatMap((key) => [
     (async () => {
