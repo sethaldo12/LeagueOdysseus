@@ -802,16 +802,21 @@ function seasonStrings() {
 const SEASON = seasonStrings();
 
 function norm(s) {
-  let t = (s || "").toLowerCase()
+  const base = (s || "").toLowerCase()
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ").trim();
+  let t = base
     .replace(/\b(fc|afc|cf|ac|ssc|ss|us|usl|sc|cd|ud|rcd|rc|as|ogc|sco|stade|de|club|deportivo|1|calcio)\b/g, " ")
     .replace(/\s+/g, " ").trim();
+  if (!t) t = base;      // a name made ONLY of stripped tokens (e.g. "Deportivo")
+                         // must not collapse to "", which would match everything
   return ALIASES[t] || t;
 }
 
 function matchTeam(rows, cfgName) {
   const target = norm(cfgName);
+  if (!target) return null;
   let hit = rows.find(r => norm(r.name) === target);
   if (hit) return hit;
   const contains = rows.filter(r => {
@@ -1731,6 +1736,7 @@ function findOwner(lg, apiName) {
   if (!map || !apiName) return null;
   if (map.has(apiName)) return map.get(apiName);
   const n = norm(apiName);
+  if (!n) return null;
   let best = null, bestDiff = Infinity;
   for (const [rowName, p] of map) {
     const rn = norm(rowName);
