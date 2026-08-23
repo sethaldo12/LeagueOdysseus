@@ -377,6 +377,13 @@
   .stand-row .spn { text-decoration: underline dotted; text-decoration-color: transparent; text-underline-offset: 3px; }
   .stand-row:hover .spn { text-decoration-color: var(--muted); }
   .pp-dot { width: 26px; height: 26px; border-radius: 50%; flex: none; }
+  .pp-seg { margin: 2px 0 14px; }
+  .mr-pts { border-radius: 10px; padding: 3px 9px; margin-left: 8px; font-variant-numeric: tabular-nums; }
+  .mr-pts.plus { background: color-mix(in srgb, #00a35c 14%, transparent); color: #007a45; }
+  .mr-pts.zero { background: var(--chip-bg); color: var(--muted); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .mr-pts.plus { color: #3ecf8e; }
+  }
   .pbadges { margin-left: 6px; font-size: 12px; letter-spacing: 1px; }
   .prof-name .pbadges { font-size: 15px; }
   /* League tab manager cards */
@@ -963,6 +970,25 @@ async function tsdbFetch(url) {
   }
 }
 
+
+// TheSportsDB enters fresh results into the "recent" feed before the season feed
+// catches up — union both so brand-new games aren\'t missing from tables/fixtures.
+async function tsdbSeasonEvents(id) {
+  const [season, recent] = await Promise.all([
+    tsdbFetch(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${id}&s=${SEASON.tsdb}`).catch(() => null),
+    tsdbFetch(`https://www.thesportsdb.com/api/v1/json/123/eventspastleague.php?id=${id}`).catch(() => null),
+  ]);
+  const out = [];
+  const seen = new Set();
+  for (const ev of [...(season?.events || []), ...(recent?.events || [])]) {
+    const k = ev.idEvent || `${ev.strHomeTeam}|${ev.strAwayTeam}|${ev.dateEvent}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(ev);
+  }
+  return { events: out };
+}
+
 async function loadLeague(key) {
   const cfg = LEAGUES[key];
   if (cfg.source.espn) {
@@ -981,11 +1007,27 @@ async function loadLeague(key) {
     const expected = (TSDB_SNAPSHOT[key]?.rows.length || 16);
     if (official.length >= Math.min(14, expected)) rows = official;
     if (!rows.length) {
-      // no complete official table — compute standings from this season's match results
+      // no complete official table — compute standings from this season's match
+      // results, then let the official rows (authoritative per team, when present)
+      // override the computed ones: the events feed can be missing games too.
       try {
-        rows = tableFromEvents(await tsdbFetch(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${id}&s=${SEASON.tsdb}`));
+        rows = tableFromEvents(await tsdbSeasonEvents(id));
+        if (rows.length && official.length) {
+          for (const o of official) {
+            const i = rows.findIndex(r => norm(r.name) === norm(o.name));
+            const better = { ...o };
+            if (i >= 0) {
+              // trust whichever source has seen more of the season for this team
+              if (rows[i].played >= o.played) continue;
+              better.logo = better.logo || rows[i].logo;
+              rows[i] = { ...rows[i], ...better };
+            } else rows.push(better);
+          }
+          rows.sort((a, b) => b.points - a.points || (b.gd ?? 0) - (a.gd ?? 0) || a.name.localeCompare(b.name));
+          rows.forEach((r, i) => { r.rank = i + 1; });
+        }
         if (rows.length) state.notes.push(official.length
-          ? `${key}: official table incomplete on the feed — standings computed from match results.`
+          ? `${key}: official table incomplete on the feed — standings merged with match results.`
           : `${key}: official table not published yet — standings computed live from match results.`);
       } catch (e) { /* fall through */ }
     }
@@ -1027,7 +1069,7 @@ async function loadFixtures(key) {
                  hs: nint(home.score), as: nint(away.score) });
     }
   } else {
-    const json = await tsdbFetch(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${cfg.source.tsdb}&s=${SEASON.tsdb}`);
+    const json = await tsdbSeasonEvents(cfg.source.tsdb);
     for (const ev of (json?.events || [])) {
       const hs = parseInt(ev.intHomeScore, 10), as = parseInt(ev.intAwayScore, 10);
       const played = !isNaN(hs) && !isNaN(as);
@@ -1307,11 +1349,52 @@ function renderPlayerProfile(results, useRP) {
       <div class="card st-tile"><div class="st-val">${rec.d}</div><div class="st-lab">Ties</div></div>
       <div class="card st-tile"><div class="st-val">${rec.l}</div><div class="st-lab">Losses</div></div>
     </div>
-    ${buildPlayerCard(r, useRP)}`;
+    <div class="seg pp-seg" id="ppSeg" role="group" aria-label="Profile view">
+      <button data-pp="table" class="${state.ppTab !== "results" ? "active" : ""}">Table</button>
+      <button data-pp="results" class="${state.ppTab === "results" ? "active" : ""}">Results</button>
+    </div>
+    ${state.ppTab === "results" ? buildPlayerResults(r) : buildPlayerCard(r, useRP)}`;
+}
+
+// completed games for one player, newest first, with the points each was worth
+function buildPlayerResults(r) {
+  const games = (state.raceGames || []).filter(g => PLAYERS[g.p].name === r.player.name);
+  if (!state.raceGames) return `<div class="card"><div class="empty-note">Loading results…</div></div>`;
+  const months = seasonMonths();
+  const teams = LEAGUE_ORDER.map(lg => r.player.teams[lg]).filter(Boolean);
+  const sel = `<div class="controls"><select id="ppMonthSelect" aria-label="Filter by month">
+      <option value="all"${state.ppMonth === "all" ? " selected" : ""}>📅 All matches</option>
+      ${months.map((mo, i) => `<option value="${i}"${String(state.ppMonth) === String(i) ? " selected" : ""}>${esc(mo.label)}</option>`).join("")}
+    </select><select id="ppTeamSelect" aria-label="Filter by team">
+      <option value="all"${state.ppTeam === "all" ? " selected" : ""}>🛡️ All teams</option>
+      ${teams.map(t => `<option value="${esc(t)}"${state.ppTeam === t ? " selected" : ""}>${esc(t)}</option>`).join("")}
+    </select></div>`;
+  let shown = games;
+  if (state.ppMonth !== "all") {
+    const mo = months[+state.ppMonth];
+    shown = shown.filter(g => { const d = new Date(g.t); return d.getFullYear() === mo.y && d.getMonth() === mo.m; });
+  }
+  if (state.ppTeam !== "all") shown = shown.filter(g => g.team === state.ppTeam);
+  shown = [...shown].sort((a, b) => b.t - a.t);
+  if (!shown.length) {
+    const what = state.ppTeam !== "all" ? `for ${esc(state.ppTeam)}` : "";
+    const when = state.ppMonth === "all" ? "yet" : "in " + esc(months[+state.ppMonth].label);
+    return `${sel}<div class="card"><div class="empty-note">No completed games ${what ? what + " " : ""}${when}.</div></div>`;
+  }
+  const rows = shown.map(g => {
+    const res = g.gf > g.ga ? 3 : g.gf === g.ga ? 1 : 0;
+    const w = (WEIGHTS[`${g.lg}|${g.team}`] ?? 100) / 100;
+    return buildMatchRow(g.lg, { home: g.home, away: g.away, date: new Date(g.t), state: "post", hs: g.hs, as: g.as, clock: "" },
+      { showDate: true, pts: res * w });
+  }).join("");
+  return `${sel}<div class="card">${rows}</div>`;
 }
 
 function openPlayerProfile(name) {
   state.ppOrigin = state.tab === "league" ? "league" : "home";
+  state.ppTab = "table";
+  state.ppMonth = "all";
+  state.ppTeam = "all";
   state.openPlayer = name;
   if (state.tab !== "home") showTab("home");
   render();
@@ -1512,7 +1595,8 @@ function raceAddGame(acc, lg, t, homeName, awayName, hs, as, eid) {
     const pts = my > opp ? 3 : my === opp ? 1 : 0;
     const w = (WEIGHTS[`${lg}|${team}`] ?? 100) / 100;
     if (pts) acc.events.push({ t, p: pi, d: pts * w });
-    acc.games.push({ t, p: pi, lg, team, gf: my, ga: opp, eid: eid ?? null });
+    acc.games.push({ t, p: pi, lg, team, gf: my, ga: opp, eid: eid ?? null,
+                     home: homeName, away: awayName, hs, as, isHome });
   });
 }
 
@@ -1879,9 +1963,11 @@ function buildMatchRow(lg, f, opts) {
   const isFT = f.state === "post" && f.hs != null;
   const dateStr = opts.showDate
     ? `<span class="ms ms-date">${f.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</span>` : "";
-  const status = isLive ? `${dateStr}<span class="ms ms-live">${esc(f.clock || "")}</span>`
+  const ptsChip = opts.pts == null ? ""
+    : `<span class="ms mr-pts ${opts.pts > 0 ? "plus" : "zero"}">${opts.pts > 0 ? "+" + fmt(opts.pts) : "0"} pts</span>`;
+  const status = (isLive ? `${dateStr}<span class="ms ms-live">${esc(f.clock || "")}</span>`
                : isFT ? `${dateStr}<span class="ms ms-ft">FT</span>`
-               : `${dateStr}<span class="ms ms-time">${time}</span>`;
+               : `${dateStr}<span class="ms ms-time">${time}</span>`) + ptsChip;
   const attr = opts.keyAttr ? `data-key="${esc(opts.keyAttr)}"` : (opts.eidAttr ? `data-eid="${esc(opts.eidAttr)}"` : "");
   return `<div class="match-row ${opts.open ? "open" : ""}" ${attr}>
     <div class="mr-grid">
@@ -2376,7 +2462,7 @@ async function loadTeamSchedule(lg, teamName) {
     games.sort((a, b) => a.date - b.date);
     return games;
   } else {
-    const json = await tsdbFetch(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${cfg.source.tsdb}&s=${SEASON.tsdb}`);
+    const json = await tsdbSeasonEvents(cfg.source.tsdb);
     const n = norm(teamName);
     const hit = (x) => { const v = norm(x || ""); return v === n || v.includes(n) || n.includes(v); };
     for (const ev of (json?.events || [])) {
@@ -2647,7 +2733,10 @@ async function loadAll() {
   if (state.tab === "teams") renderTeams();
   clearTimeout(state.liveTimer);
   if (state.liveCount) state.liveTimer = setTimeout(loadAll, 60000);   // live scoreboard mode
-  ensureRaceData().then(() => { renderRecap(); renderRace(); renderBig(); }).catch(() => {});
+  ensureRaceData().then(() => {
+    renderRecap(); renderRace(); renderBig();
+    if (state.openPlayer) render();
+  }).catch(() => {});
 }
 
 $("seasonTag").textContent = SEASON.label + " season";
@@ -2743,7 +2832,15 @@ $("tiles").addEventListener("click", (e) => {
   const row = e.target.closest(".stand-row[data-player]");
   if (row) openPlayerProfile(row.dataset.player);
 });
+$("playerProfile").addEventListener("change", (e) => {
+  if (e.target.id === "ppMonthSelect") { state.ppMonth = e.target.value; render(); }
+  if (e.target.id === "ppTeamSelect") { state.ppTeam = e.target.value; render(); }
+});
 $("playerProfile").addEventListener("click", (e) => {
+  const seg = e.target.closest("#ppSeg button");
+  if (seg) { state.ppTab = seg.dataset.pp; render(); return; }
+  const tb = e.target.closest(".team-block[data-team]");
+  if (tb) { openTeamProfile(JSON.parse(tb.dataset.team)); return; }
   if (e.target.closest(".pp-back")) {
     const o = state.ppOrigin;
     state.openPlayer = null; state.ppOrigin = null;
