@@ -974,14 +974,22 @@ async function loadLeague(key) {
     const id = cfg.source.tsdb;
     const tableUrl = (s) => `https://www.thesportsdb.com/api/v1/json/123/lookuptable.php?l=${id}&s=${s}`;
     let rows = [];
-    try { rows = parseTsdb(await tsdbFetch(tableUrl(SEASON.tsdb))); } catch (e) { /* fall through */ }
+    let official = [];
+    try { official = parseTsdb(await tsdbFetch(tableUrl(SEASON.tsdb))); } catch (e) { /* fall through */ }
+    // TheSportsDB is crowd-sourced: sometimes the "official" table exists but only
+    // has a handful of teams entered. Trust it only when it looks complete.
+    const expected = (TSDB_SNAPSHOT[key]?.rows.length || 16);
+    if (official.length >= Math.min(14, expected)) rows = official;
     if (!rows.length) {
-      // no official table yet — compute standings from this season's match results
+      // no complete official table — compute standings from this season's match results
       try {
         rows = tableFromEvents(await tsdbFetch(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${id}&s=${SEASON.tsdb}`));
-        if (rows.length) state.notes.push(`${key}: official table not published yet — standings computed live from match results.`);
+        if (rows.length) state.notes.push(official.length
+          ? `${key}: official table incomplete on the feed — standings computed from match results.`
+          : `${key}: official table not published yet — standings computed live from match results.`);
       } catch (e) { /* fall through */ }
     }
+    if (!rows.length && official.length) rows = official;   // partial beats nothing
     if (!rows.length) {
       try {
         rows = parseTsdb(await tsdbFetch(tableUrl(SEASON.tsdbPrev)));
