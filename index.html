@@ -1037,6 +1037,10 @@ async function loadLeague(key) {
       const wtitle = `${wy0}\u2013${wy1.slice(2)} ${key}`;
       const wjson = await tsdbFetch(`https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(wtitle)}&prop=text&format=json&redirects=1&origin=*`);
       const wrows = parseWikiTable(wjson);
+      state.wikiDebug = !wjson ? "empty response"
+        : wjson.error ? `api error: ${wjson.error.code || "?"}`
+        : !wjson.parse?.text?.["*"] ? "no article html"
+        : `article ok, parsed ${wrows.length} table rows`;
       if (wrows.length >= 14) {
         try {   // borrow crests from the TSDB events (fixtures reuse this same request)
           const evRows = tableFromEvents(await tsdbSeasonEvents(id));
@@ -1044,7 +1048,7 @@ async function loadLeague(key) {
         } catch (e) {}
         return wrows;
       }
-    } catch (e) { /* fall through to TheSportsDB */ }
+    } catch (e) { state.wikiDebug = "fetch failed: " + (e?.message || e); }
     const tableUrl = (s) => `https://www.thesportsdb.com/api/v1/json/123/lookuptable.php?l=${id}&s=${s}`;
     let rows = [];
     let official = [];
@@ -2745,6 +2749,7 @@ function updateBanner() {
   const msgs = [];
   if (state.errors.length) msgs.push(`⚠️ Couldn't load: ${state.errors.join(", ")} — scores shown without those leagues. Try refresh.`);
   if (state.tsdbStale) msgs.push(`Liga Portugal 2's feed is down — showing its data from ${state.tsdbStale}. Everything else is live.`);
+  if (location.search.includes("debug") && state.wikiDebug) msgs.push(`🔧 LP2 Wikipedia: ${state.wikiDebug}`);
   if (state.liveOwnedCount) {
     msgs.push(state.useLive
       ? `<span class="live-text">⚽ Matches in play</span> — points and rankings include live scores as they stand, and the page refreshes itself every minute.`
