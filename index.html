@@ -971,6 +971,39 @@ async function tsdbFetch(url) {
 }
 
 
+
+// Wikipedia league-table parser: editor-maintained tables are complete within
+// hours of matches, and the MediaWiki API allows browser calls (origin=*).
+function parseWikiTable(json) {
+  const html = json?.parse?.text?.["*"];
+  if (!html) return [];
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  for (const tbl of doc.querySelectorAll("table")) {
+    const trs = [...tbl.querySelectorAll("tr")];
+    if (trs.length < 10) continue;
+    const heads = [...(trs[0]?.cells || [])].map(c => c.textContent.trim().toLowerCase());
+    const col = (h) => heads.indexOf(h);
+    if (col("pld") < 0 || col("pts") < 0 || col("w") < 0 || col("team") < 0) continue;
+    const num = (s) => { const v = parseInt(String(s).replace(/\u2212/g, "-").replace(/\[.*?\]/g, ""), 10); return isNaN(v) ? 0 : v; };
+    const rows = [];
+    for (const tr of trs.slice(1)) {
+      const cells = [...tr.cells];
+      if (cells.length < 6) continue;
+      const name = (cells[col("team")]?.textContent || "")
+        .replace(/\[.*?\]/g, "").replace(/\s*\((C|R|P|Q|O)\)\s*$/, "").trim();
+      if (!name) continue;
+      const pts = cells[col("pts")], pld = cells[col("pld")];
+      if (!pts || !pld) continue;
+      rows.push({ name, logo: null, rank: rows.length + 1,
+        points: num(pts.textContent), played: num(pld.textContent),
+        w: num(cells[col("w")]?.textContent), d: num(cells[col("d")]?.textContent),
+        l: num(cells[col("l")]?.textContent), gd: col("gd") >= 0 ? num(cells[col("gd")]?.textContent) : null });
+    }
+    if (rows.length >= 14) return rows;               // a real, complete table
+  }
+  return [];
+}
+
 // TheSportsDB enters fresh results into the "recent" feed before the season feed
 // catches up — union both so brand-new games aren\'t missing from tables/fixtures.
 async function tsdbSeasonEvents(id) {
@@ -998,6 +1031,20 @@ async function loadLeague(key) {
     return rows;
   } else {
     const id = cfg.source.tsdb;
+    // Wikipedia first — the most complete free source for this league
+    try {
+      const [wy0, wy1] = SEASON.tsdb.split("-");
+      const wtitle = `${wy0}\u2013${wy1.slice(2)} ${key}`;
+      const wjson = await tsdbFetch(`https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(wtitle)}&prop=text&format=json&redirects=1&origin=*`);
+      const wrows = parseWikiTable(wjson);
+      if (wrows.length >= 14) {
+        try {   // borrow crests from the TSDB events (fixtures reuse this same request)
+          const evRows = tableFromEvents(await tsdbSeasonEvents(id));
+          for (const wr of wrows) { const hit = matchTeam(evRows, wr.name); if (hit?.logo) wr.logo = hit.logo; }
+        } catch (e) {}
+        return wrows;
+      }
+    } catch (e) { /* fall through to TheSportsDB */ }
     const tableUrl = (s) => `https://www.thesportsdb.com/api/v1/json/123/lookuptable.php?l=${id}&s=${s}`;
     let rows = [];
     let official = [];
