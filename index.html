@@ -1004,22 +1004,54 @@ function parseWikiTable(json) {
   return [];
 }
 
-// TheSportsDB enters fresh results into the "recent" feed before the season feed
-// catches up — union both so brand-new games aren\'t missing from tables/fixtures.
+// TheSportsDB's event feeds disagree with each other: the season feed lags new
+// rounds by days, the "recent" feed only holds the latest entry or two, and only
+// the per-round feed reliably carries a full matchday. Union season + recent +
+// the newest rounds, then remember every completed game in localStorage so a
+// result never disappears from our tables once any feed has shown it to us
+// (crowd-sourced entries come and go).
 async function tsdbSeasonEvents(id) {
+  const base = "https://www.thesportsdb.com/api/v1/json/123";
   const [season, recent] = await Promise.all([
-    tsdbFetch(`https://www.thesportsdb.com/api/v1/json/123/eventsseason.php?id=${id}&s=${SEASON.tsdb}`).catch(() => null),
-    tsdbFetch(`https://www.thesportsdb.com/api/v1/json/123/eventspastleague.php?id=${id}`).catch(() => null),
+    tsdbFetch(`${base}/eventsseason.php?id=${id}&s=${SEASON.tsdb}`).catch(() => null),
+    tsdbFetch(`${base}/eventspastleague.php?id=${id}`).catch(() => null),
   ]);
-  const out = [];
-  const seen = new Set();
-  for (const ev of [...(season?.events || []), ...(recent?.events || [])]) {
-    const k = ev.idEvent || `${ev.strHomeTeam}|${ev.strAwayTeam}|${ev.dateEvent}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(ev);
+  // a league pairing (home vs away) happens once per season — a stable identity
+  // that survives date changes and crowd re-entries under a fresh idEvent
+  const keyOf = (ev) => `${ev.strHomeTeam}|${ev.strAwayTeam}`;
+  const scored = (ev) => !isNaN(parseInt(ev.intHomeScore, 10)) && !isNaN(parseInt(ev.intAwayScore, 10));
+  const byKey = new Map();
+  const add = (ev) => {
+    if (!ev || !ev.strHomeTeam || !ev.strAwayTeam) return;
+    const prev = byKey.get(keyOf(ev));
+    // fresher feeds are added later — let them win, unless it would erase a score
+    if (!prev || scored(ev) || !scored(prev)) byKey.set(keyOf(ev), ev);
+  };
+  for (const ev of [...(season?.events || []), ...(recent?.events || [])]) add(ev);
+  // fetch the newest round(s) directly — the only feed with prompt full matchdays
+  let maxR = 0;
+  for (const ev of byKey.values()) { const r = parseInt(ev.intRound, 10); if (!isNaN(r) && r > maxR) maxR = r; }
+  for (let r = Math.max(maxR, 1), extra = 0; extra < 3; r++, extra++) {
+    let evs = [];
+    try { evs = (await tsdbFetch(`${base}/eventsround.php?id=${id}&r=${r}&s=${SEASON.tsdb}`))?.events || []; } catch (e) {}
+    evs.forEach(add);
+    if (r > maxR && !evs.length) break;    // walked past the newest round on the feed
   }
-  return { events: out };
+  // persistent memory of completed games (feeds win; memory only fills gaps)
+  try {
+    const sk = `loEvts.${id}.${SEASON.tsdb}.v1`;
+    const stored = JSON.parse(localStorage.getItem(sk) || "{}");
+    for (const [k, ev] of Object.entries(stored)) if (!byKey.has(k)) byKey.set(k, ev);
+    const keep = {};
+    for (const [k, ev] of byKey) if (scored(ev)) keep[k] = {
+      idEvent: ev.idEvent, strHomeTeam: ev.strHomeTeam, strAwayTeam: ev.strAwayTeam,
+      dateEvent: ev.dateEvent, strTime: ev.strTime, strTimestamp: ev.strTimestamp, intRound: ev.intRound,
+      intHomeScore: ev.intHomeScore, intAwayScore: ev.intAwayScore, strStatus: ev.strStatus,
+      strHomeTeamBadge: ev.strHomeTeamBadge, strAwayTeamBadge: ev.strAwayTeamBadge,
+    };
+    localStorage.setItem(sk, JSON.stringify(keep));
+  } catch (e) {}
+  return { events: [...byKey.values()] };
 }
 
 async function loadLeague(key) {
