@@ -1061,8 +1061,11 @@ async function loadLeague(key) {
             wrows.sort((a, b) => b.points - a.points || (b.gd ?? 0) - (a.gd ?? 0) || a.name.localeCompare(b.name));
             wrows.forEach((r, i) => { r.rank = i + 1; });
             state.wikiDebug += `, ${fresher} rows updated with newer results`;
+          } else {
+            const mx = evRows.reduce((m, r) => Math.max(m, r.played || 0), 0);
+            state.wikiDebug += `, no newer results (events feed: ${evRows.length} teams, max ${mx} played)`;
           }
-        } catch (e) {}
+        } catch (e) { state.wikiDebug += `, events overlay failed: ${e?.message || e}`; }
         return wrows;
       }
     } catch (e) { state.wikiDebug = "fetch failed: " + (e?.message || e); }
