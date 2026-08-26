@@ -1046,21 +1046,21 @@ async function loadLeague(key) {
                 // and overlay any results newer than Wikipedia's table: editors update
                 // the wiki within hours, but the events feed can be ahead by a matchday.
           const evRows = tableFromEvents(await tsdbSeasonEvents(id));
-          let fresher = 0;
+          const updated = [];
           for (const wr of wrows) {
             const hit = matchTeam(evRows, wr.name);
             if (!hit) continue;
             if (hit.logo) wr.logo = hit.logo;
             if (hit.played > wr.played) {   // events feed has seen more of the season for this team
+              updated.push(`${wr.name} ${wr.played}→${hit.played}gp`);
               wr.points = hit.points; wr.played = hit.played;
               wr.w = hit.w; wr.d = hit.d; wr.l = hit.l; wr.gd = hit.gd;
-              fresher++;
             }
           }
-          if (fresher) {
+          if (updated.length) {
             wrows.sort((a, b) => b.points - a.points || (b.gd ?? 0) - (a.gd ?? 0) || a.name.localeCompare(b.name));
             wrows.forEach((r, i) => { r.rank = i + 1; });
-            state.wikiDebug += `, ${fresher} rows updated with newer results`;
+            state.wikiDebug += `, updated: ${updated.join(", ")}`;
           } else {
             const mx = evRows.reduce((m, r) => Math.max(m, r.played || 0), 0);
             state.wikiDebug += `, no newer results (events feed: ${evRows.length} teams, max ${mx} played)`;
