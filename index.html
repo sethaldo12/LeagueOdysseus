@@ -888,6 +888,47 @@ function parseTsdb(json) {
   })).sort((a, b) => a.rank - b.rank);
 }
 
+// Order table rows the way Liga Portugal does: points, then the head-to-head
+// mini-table among the tied teams (points, goal difference, goals in those
+// games), then overall goal difference and goals scored. The official rules go
+// on to disciplinary records, which no free feed publishes — so a very deep tie
+// can still sit a place away from the official table. A row's pre-existing rank
+// (e.g. Wikipedia's official ordering) is kept as a late tie-breaker so teams
+// we didn't touch keep their official relative order.
+function rankRows(rows, events) {
+  rows.forEach((r) => { r._sr = r.rank > 0 ? r.rank : null; });
+  const played = (events || []).filter(e =>
+    !isNaN(parseInt(e.intHomeScore, 10)) && !isNaN(parseInt(e.intAwayScore, 10)));
+  const groups = new Map();
+  for (const r of rows) { const g = groups.get(r.points) || []; g.push(r); groups.set(r.points, g); }
+  const h2h = new Map();                    // `${points}|${norm(name)}` -> {p, gd, gf}
+  for (const [pts, g] of groups) {
+    if (g.length < 2) continue;
+    const names = new Set(g.map(r => norm(r.name)));
+    const stat = new Map(g.map(r => [norm(r.name), { p: 0, gd: 0, gf: 0 }]));
+    for (const e of played) {
+      const h = norm(e.strHomeTeam || ""), a = norm(e.strAwayTeam || "");
+      if (!names.has(h) || !names.has(a)) continue;   // only games among the tied teams
+      const hs = parseInt(e.intHomeScore, 10), as = parseInt(e.intAwayScore, 10);
+      const H = stat.get(h), A = stat.get(a);
+      H.p += hs > as ? 3 : hs === as ? 1 : 0; A.p += as > hs ? 3 : hs === as ? 1 : 0;
+      H.gd += hs - as; A.gd += as - hs; H.gf += hs; A.gf += as;
+    }
+    for (const [n, s] of stat) h2h.set(`${pts}|${n}`, s);
+  }
+  const Z = { p: 0, gd: 0, gf: 0 };
+  rows.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    const sa = h2h.get(`${a.points}|${norm(a.name)}`) || Z;
+    const sb = h2h.get(`${b.points}|${norm(b.name)}`) || Z;
+    return (sb.p - sa.p) || (sb.gd - sa.gd) || (sb.gf - sa.gf)
+      || ((b.gd ?? 0) - (a.gd ?? 0)) || ((b.gf ?? 0) - (a.gf ?? 0))
+      || ((a._sr ?? 1e9) - (b._sr ?? 1e9)) || a.name.localeCompare(b.name);
+  });
+  rows.forEach((r, i) => { r.rank = i + 1; });
+  return rows;
+}
+
 // Build a league table from raw match results (used until the official table is published)
 function tableFromEvents(json) {
   const events = json?.events || [];
@@ -911,10 +952,9 @@ function tableFromEvents(json) {
     else { home.points += 1; away.points += 1; home.d = (home.d || 0) + 1; away.d = (away.d || 0) + 1; }
   }
   const rows = [...teams.values()]
-    .sort((a, b) => b.points - a.points || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf || a.name.localeCompare(b.name))
-    .map((t, i) => ({ name: t.name, logo: t.logo, rank: i + 1, points: t.points, played: t.played,
-                      w: t.w || 0, d: t.d || 0, l: t.l || 0, gd: t.gf - t.ga }));
-  return rows;
+    .map((t) => ({ name: t.name, logo: t.logo, rank: 0, points: t.points, played: t.played,
+                   w: t.w || 0, d: t.d || 0, l: t.l || 0, gd: t.gf - t.ga, gf: t.gf }));
+  return rankRows(rows, events);
 }
 
 // Last-resort bundled snapshot for Liga Portugal 2: used only when the live feed
@@ -997,7 +1037,8 @@ function parseWikiTable(json) {
       rows.push({ name, logo: null, rank: rows.length + 1,
         points: num(pts.textContent), played: num(pld.textContent),
         w: num(cells[col("w")]?.textContent), d: num(cells[col("d")]?.textContent),
-        l: num(cells[col("l")]?.textContent), gd: col("gd") >= 0 ? num(cells[col("gd")]?.textContent) : null });
+        l: num(cells[col("l")]?.textContent), gd: col("gd") >= 0 ? num(cells[col("gd")]?.textContent) : null,
+        gf: col("gf") >= 0 ? num(cells[col("gf")]?.textContent) : null });
     }
     if (rows.length >= 14) return rows;               // a real, complete table
   }
@@ -1077,7 +1118,8 @@ async function loadLeague(key) {
         try {   // borrow crests from the TSDB events (fixtures reuse this same request),
                 // and overlay any results newer than Wikipedia's table: editors update
                 // the wiki within hours, but the events feed can be ahead by a matchday.
-          const evRows = tableFromEvents(await tsdbSeasonEvents(id));
+          const evJson = await tsdbSeasonEvents(id);
+          const evRows = tableFromEvents(evJson);
           const updated = [];
           for (const wr of wrows) {
             const hit = matchTeam(evRows, wr.name);
@@ -1086,12 +1128,11 @@ async function loadLeague(key) {
             if (hit.played > wr.played) {   // events feed has seen more of the season for this team
               updated.push(`${wr.name} ${wr.played}→${hit.played}gp`);
               wr.points = hit.points; wr.played = hit.played;
-              wr.w = hit.w; wr.d = hit.d; wr.l = hit.l; wr.gd = hit.gd;
+              wr.w = hit.w; wr.d = hit.d; wr.l = hit.l; wr.gd = hit.gd; wr.gf = hit.gf;
             }
           }
           if (updated.length) {
-            wrows.sort((a, b) => b.points - a.points || (b.gd ?? 0) - (a.gd ?? 0) || a.name.localeCompare(b.name));
-            wrows.forEach((r, i) => { r.rank = i + 1; });
+            rankRows(wrows, evJson.events);
             state.wikiDebug += `, updated: ${updated.join(", ")}`;
           } else {
             const mx = evRows.reduce((m, r) => Math.max(m, r.played || 0), 0);
@@ -1114,7 +1155,8 @@ async function loadLeague(key) {
       // results, then let the official rows (authoritative per team, when present)
       // override the computed ones: the events feed can be missing games too.
       try {
-        rows = tableFromEvents(await tsdbSeasonEvents(id));
+        const evJson = await tsdbSeasonEvents(id);
+        rows = tableFromEvents(evJson);
         if (rows.length && official.length) {
           for (const o of official) {
             const i = rows.findIndex(r => norm(r.name) === norm(o.name));
@@ -1126,8 +1168,7 @@ async function loadLeague(key) {
               rows[i] = { ...rows[i], ...better };
             } else rows.push(better);
           }
-          rows.sort((a, b) => b.points - a.points || (b.gd ?? 0) - (a.gd ?? 0) || a.name.localeCompare(b.name));
-          rows.forEach((r, i) => { r.rank = i + 1; });
+          rankRows(rows, evJson.events);
         }
         if (rows.length) state.notes.push(official.length
           ? `${key}: official table incomplete on the feed — standings merged with match results.`
