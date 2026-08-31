@@ -632,8 +632,8 @@
   .ar-foot { text-align: center; font-size: 11.5px; color: var(--muted); padding-top: 4px; }
   .pk-back { border: none; background: var(--chip-bg); color: var(--ink-2); width: 30px; height: 30px;
     border-radius: 50%; font-size: 18px; cursor: pointer; line-height: 1; padding-bottom: 3px; }
-  #drWrap { position: relative; background: #46943e; }
-  #drCanvas { display: block; width: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #drWrap, #roWrap { position: relative; background: #46943e; }
+  #drCanvas, #roCanvas { display: block; width: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
 
   /* --- Cinzel wordmark (header title only) --- */
   @font-face {
@@ -3226,19 +3226,20 @@ function arcadeOpen() {
   arcadeRender();
 }
 function arcadeClose() {
-  drStop();
+  drStop(); roStop();
   $("pkGame").hidden = true;
   document.body.style.overflow = "";
-  pk.phase = "idle"; dr.phase = "idle";
+  pk.phase = "idle"; dr.phase = "idle"; ro.phase = "idle";
 }
 function arcadeMenu() {
-  drStop();
-  pk.phase = "idle"; dr.phase = "idle"; ar.view = "menu";
+  drStop(); roStop();
+  pk.phase = "idle"; dr.phase = "idle"; ro.phase = "idle"; ar.view = "menu";
   arcadeRender();
 }
 function arcadeRender() {
   if (ar.view === "pk") return pkRender();
   if (ar.view === "dr") return drRender();
+  if (ar.view === "ro") return roRender();
   const el = $("pkGame");
   el.classList.remove("anim");
   el.innerHTML = `<div class="pk-modal"><div class="pk-card">
@@ -3252,6 +3253,9 @@ function arcadeRender() {
       <button class="ar-game" data-game="dr"><span class="ar-ico">🏃</span>
         <span class="ar-txt"><span class="ar-name">Breakaway</span>
         <span class="ar-sub">Dribble upfield, dodge the tackles, score. · Best: ${dr.best}</span></span></button>
+      <button class="ar-game" data-game="ro"><span class="ar-ico">⭕</span>
+        <span class="ar-txt"><span class="ar-name">Rondo</span>
+        <span class="ar-sub">Keep the ball moving. Never get caught. · Best: ${ro.best}</span></span></button>
       <div class="ar-foot">Found the Boot Room? Keep it between us. 🍻</div>
     </div>
   </div></div>`;
@@ -3652,6 +3656,254 @@ function drRounded(ctx, x, y, w2, h2, r) {
   ctx.closePath();
 }
 
+/* ---------- Rondo (keep-ball) ---------- */
+const ro = { score: 0, phase: "idle", submitted: false, beatNote: null, submitErr: false, board: null,
+             best: parseInt(localStorage.getItem("loRoBest") || "0", 10) || 0 };
+let roW = null;
+
+function roOpen() {
+  ar.view = "ro";
+  ro.phase = "idle";
+  roRender();
+  roLoadBoard();
+}
+function roStop() { if (roW) { cancelAnimationFrame(roW.raf); roW = null; } }
+function roRender() {
+  const el = $("pkGame");
+  const over = ro.phase === "over";
+  el.classList.remove("anim");
+  el.innerHTML = `<div class="pk-modal"><div class="pk-card">
+    <div class="pk-head"><button class="pk-back" aria-label="Back to games">‹</button>
+      <span class="pk-title">⭕ Rondo</span>
+      <span class="pk-streak" id="roChip" style="background:${accent(arPlayerObj())};color:#fff">${esc(ar.player || "")} · Passes: ${ro.score}</span>
+      <button class="pk-x" aria-label="Close">✕</button></div>
+    ${over ? `<div class="pk-over" style="padding-top:14px">
+        <div class="pk-final">${esc(ro.endText || "Possession lost")} — <b>${ro.score}</b> pass${ro.score === 1 ? "" : "es"}</div>
+        <div class="pk-sub">Personal best on this phone: <b>${ro.best}</b></div>
+        ${ro.submitted ? `<div class="pk-sub" style="color:var(--good)">✓ On the board as ${esc(ar.player || "")}.</div>` : ""}
+        ${ro.beatNote ? `<div class="pk-sub" style="color:var(--bad)">${esc(ro.beatNote)}</div>` : ""}
+        ${ro.submitErr ? `<div class="pk-sub" style="color:var(--bad)">Couldn't reach the leaderboard. <button class="pk-retry">Retry</button></div>` : ""}
+        <div class="pk-actions"><button class="ro-again pk-again">Play again</button><button class="pk-quit">Close</button></div>
+      </div>`
+      : `<div id="roWrap"><canvas id="roCanvas"></canvas><div id="roFlash" class="pk-flash"></div></div>
+    <div class="pk-hint">Tap a teammate to pass. The rondo never stops — hold it too long and you're tackled. Thread it through a defender for OLÉ! (+2).</div>`}
+    <div class="pk-board" id="roBoard"></div>
+  </div></div>`;
+  roRenderBoard();
+  if (!over) roBoot();
+}
+function roRenderBoard() {
+  const el = $("roBoard");
+  if (!el) return;
+  el.innerHTML = `<h3>🏆 Leaderboard — each player&#39;s best</h3>${arcadeBoardHtml(ro.board)}`;
+}
+async function roLoadBoard() {
+  ro.board = null; roRenderBoard();
+  try { ro.board = await arcadeFetchBoard("rondo"); } catch (e) { ro.board = "err"; }
+  roRenderBoard();
+}
+async function roAutoSubmit() {
+  if (ro.submitted || ro.score < 1 || !ar.player) return;
+  ro.submitErr = false; ro.beatNote = null;
+  let best = null;
+  try {
+    const board = Array.isArray(ro.board) ? ro.board : await arcadeFetchBoard("rondo");
+    const cur = board.find(r => r.name === ar.player);
+    best = cur ? cur.score : 0;
+  } catch (e) { best = null; }
+  if (best !== null && best > 0 && ro.score <= best) {
+    ro.beatNote = `${ar.player}'s best is already ${best} — beat it to change the board.`;
+    roRender(); return;
+  }
+  try {
+    await arcadePost("rondo", ar.player, ro.score);
+    ro.submitted = true;
+    roRender();
+    roLoadBoard();
+  } catch (e) { ro.submitErr = true; roRender(); }
+}
+function roFlash(text, good) {
+  const f = $("roFlash");
+  if (!f) return;
+  f.textContent = text;
+  f.style.color = good ? "#7dffb8" : "#ffb3b3";
+  f.classList.add("show");
+}
+function roDefMake(n) {
+  const rivals = PLAYERS.filter(p => p.name !== ar.player);
+  const p = rivals[(n + Math.floor(Math.random() * rivals.length)) % rivals.length];
+  return { x: 0, y: 0, jersey: accent(p), name: p.name, cover: -1, thinkT: 0 };
+}
+function roBoot() {
+  const c = $("roCanvas");
+  if (!c) return;
+  const cssW = c.parentElement.clientWidth || 396;
+  const cssH = Math.max(330, Math.min(480, Math.round(window.innerHeight * 0.54)));
+  const dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(cssW * dpr); c.height = Math.round(cssH * dpr);
+  c.style.height = cssH + "px";
+  const ctx = c.getContext("2d");
+  ctx.scale(dpr, dpr);
+  roStop();
+  ro.score = 0; ro.submitted = false; ro.beatNote = null; ro.submitErr = false; ro.endText = "";
+  ro.phase = "play";
+  roW = { ctx, w: cssW, h: cssH, t: 0, last: performance.now(), raf: 0,
+          cx: cssW / 2, cy: cssH * 0.52, R0: Math.min(cssW, cssH) / 2 - 46,
+          N: 6, holder: 0, ball: { x: 0, y: 0, fly: null },
+          defs: [roDefMake(0)],
+          phases: [...Array(6)].map(() => Math.random() * 6.28) };
+  const d = roW.defs[0];
+  d.x = roW.cx; d.y = roW.cy;
+  const hp = roMatePos(roW.holder);
+  roW.ball.x = hp.x; roW.ball.y = hp.y;
+  c.addEventListener("pointerup", (e) => {
+    if (!roW || ro.phase !== "play") return;
+    const rect = c.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    let best = -1, bd = 1e9;
+    for (let i = 0; i < roW.N; i++) {
+      if (i === roW.holder) continue;
+      const p = roMatePos(i);
+      const dd = Math.hypot(p.x - x, p.y - y);
+      if (dd < bd) { bd = dd; best = i; }
+    }
+    if (best >= 0 && bd < 64) roPass(best);
+  });
+  roW.raf = requestAnimationFrame(roFrame);
+}
+function roMatePos(i) {
+  const w = roW;
+  const squeeze = 1 - Math.min(ro.score * 0.006, 0.18);          // the circle tightens as the count climbs
+  const a = (i / w.N) * 6.2832 - 1.5708 + Math.sin(w.t * 0.5 + w.phases[i]) * 0.10;
+  const r = w.R0 * squeeze * (0.92 + 0.08 * Math.sin(w.t * 0.37 + w.phases[i] * 2));
+  return { x: w.cx + Math.cos(a) * r, y: w.cy + Math.sin(a) * r };
+}
+function roSegDist(a, b, p) {
+  const vx = b.x - a.x, vy = b.y - a.y;
+  const L2 = vx * vx + vy * vy || 1;
+  const k = Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / L2));
+  return Math.hypot(a.x + vx * k - p.x, a.y + vy * k - p.y);
+}
+function roSafestIdx() {
+  const w = roW, hp = roMatePos(w.holder);
+  let best = -1, bestD = -1;
+  for (let i = 0; i < w.N; i++) {
+    if (i === w.holder) continue;
+    const tp = roMatePos(i);
+    let d = Infinity;
+    for (const df of w.defs) d = Math.min(d, roSegDist(hp, tp, df));
+    if (d > bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+function roPass(i) {
+  if (ro.phase !== "play" || !roW || roW.ball.fly || i === roW.holder || i < 0 || i >= roW.N) return;
+  const from = roMatePos(roW.holder), to = roMatePos(i);
+  const d = Math.hypot(to.x - from.x, to.y - from.y);
+  roW.ball.fly = { fx: from.x, fy: from.y, toIdx: i, s: roW.t, dur: Math.max(d / 470, 0.12), meg: false };
+}
+function roEnd(kind, who) {
+  if (ro.phase !== "play") return;
+  ro.phase = "over";
+  cancelAnimationFrame(roW.raf);
+  if (ro.score > ro.best) {
+    ro.best = ro.score;
+    try { localStorage.setItem("loRoBest", String(ro.best)); } catch (e) {}
+  }
+  ro.endText = kind === "intercepted" ? `Cut out${who ? ` by ${who}` : ""}` : `Caught in possession${who ? ` by ${who}` : ""}`;
+  roFlash(kind === "intercepted" ? "INTERCEPTED!" : "TACKLED!", false);
+  setTimeout(() => { if (ro.phase === "over" && ar.view === "ro") { roRender(); roAutoSubmit(); } }, 900);
+}
+function roFrame(ts) {
+  if (!roW || ro.phase !== "play") return;
+  const w = roW, b = w.ball;
+  const dt = Math.min((ts - w.last) / 1000, 0.05);
+  w.last = ts; w.t += dt;
+  // the ball
+  if (b.fly) {
+    const to = roMatePos(b.fly.toIdx);
+    const k = Math.min((w.t - b.fly.s) / b.fly.dur, 1);
+    b.x = b.fly.fx + (to.x - b.fly.fx) * k;
+    b.y = b.fly.fy + (to.y - b.fly.fy) * k;
+    if (k >= 1) {
+      w.holder = b.fly.toIdx;
+      ro.score += b.fly.meg ? 2 : 1;
+      const chip = $("roChip"); if (chip) chip.textContent = `${ar.player} · Passes: ${ro.score}`;
+      if (b.fly.meg) {
+        roFlash("OLÉ!", true);
+        setTimeout(() => { const f = $("roFlash"); if (f) f.classList.remove("show"); }, 600);
+      }
+      b.fly = null;
+      // 4v1 becomes 4v2 once you've earned it
+      if (ro.score >= 12 && w.defs.length < 2) {
+        const d2 = roDefMake(1);
+        d2.x = w.cx; d2.y = w.cy;
+        w.defs.push(d2);
+      }
+    }
+  } else {
+    const hp = roMatePos(w.holder);
+    b.x = hp.x + 9; b.y = hp.y + 11;
+  }
+  // the defenders
+  const speed = Math.min(90 + ro.score * 4.2, 235);
+  for (const df of w.defs) {
+    df.thinkT -= dt;
+    if (df.thinkT <= 0) {
+      df.thinkT = 0.5 + Math.random() * 0.4;
+      const pAnt = Math.min(0.12 + ro.score * 0.03, 0.65);       // he starts reading your outlets
+      df.cover = Math.random() < pAnt ? roSafestIdx() : -1;
+    }
+    let tx = b.x, ty = b.y;
+    if (df.cover >= 0 && df.cover !== w.holder) {
+      const hp = roMatePos(w.holder), cp = roMatePos(df.cover);
+      tx = (hp.x + cp.x) / 2; ty = (hp.y + cp.y) / 2;            // jump the lane
+    }
+    const dd = Math.hypot(tx - df.x, ty - df.y) || 1;
+    df.x += (tx - df.x) / dd * speed * dt;
+    df.y += (ty - df.y) / dd * speed * dt;
+    const dBall = Math.hypot(b.x - df.x, b.y - df.y);
+    if (b.fly) {
+      if (dBall < 13) return roEnd("intercepted", df.name);
+      if (dBall < 19 && !b.fly.meg) b.fly.meg = true;            // threaded right through him
+    } else if (dBall < 20) {
+      return roEnd("tackled", df.name);
+    }
+  }
+  roDraw();
+  w.raf = requestAnimationFrame(roFrame);
+}
+function roFigure(ctx, x, y, s, jersey) {
+  ctx.fillStyle = "rgba(0,0,0,0.20)";
+  ctx.beginPath(); ctx.ellipse(x, y + s * 0.52, s * 0.34, s * 0.11, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = jersey;
+  drRounded(ctx, x - s * 0.28, y - s * 0.18, s * 0.56, s * 0.6, 7); ctx.fill();
+  ctx.fillStyle = "#e8b98a";
+  ctx.beginPath(); ctx.arc(x, y - s * 0.32, s * 0.21, 0, 7); ctx.fill();
+}
+function roDraw() {
+  const w = roW, { ctx } = w;
+  ctx.fillStyle = "#4e9c45";
+  ctx.fillRect(0, 0, w.w, w.h);
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(w.cx, w.cy, w.R0 * (1 - Math.min(ro.score * 0.006, 0.18)) + 26, 0, 7); ctx.stroke();
+  const mine = accent(arPlayerObj()) || "#2a78d6";
+  const safe = ro.score < 8 ? roSafestIdx() : -1;                // training wheels come off at 8
+  for (let i = 0; i < w.N; i++) {
+    const p = roMatePos(i);
+    if (i === safe && i !== w.holder && !w.ball.fly) {
+      ctx.strokeStyle = `rgba(255,255,255,${0.55 + 0.35 * Math.sin(w.t * 6)})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 26, 0, 7); ctx.stroke();
+    }
+    roFigure(ctx, p.x, p.y, i === w.holder ? 40 : 36, mine);
+  }
+  for (const df of w.defs) roFigure(ctx, df.x, df.y, 40, df.jersey);
+  ctx.font = "17px serif";
+  ctx.fillText("⚽", w.ball.x - 8, w.ball.y + 6);
+}
+
 /* ---------- shared input wiring ---------- */
 $("pkGame").addEventListener("click", (e) => {
   const pick = e.target.closest(".ar-pick");
@@ -3663,12 +3915,13 @@ $("pkGame").addEventListener("click", (e) => {
   const g = e.target.closest(".ar-game");
   if (g) {
     if (!ar.player) { const w = $("arWho"); if (w) w.classList.add("need"); return; }
-    return g.dataset.game === "pk" ? pkOpen() : drOpen();
+    return g.dataset.game === "pk" ? pkOpen() : g.dataset.game === "dr" ? drOpen() : roOpen();
   }
   const zone = e.target.closest(".pk-zone");
   if (zone) return pkShoot(parseInt(zone.dataset.z, 10));
-  if (e.target.closest(".pk-retry")) return ar.view === "pk" ? pkAutoSubmit() : drAutoSubmit();
+  if (e.target.closest(".pk-retry")) return ar.view === "pk" ? pkAutoSubmit() : ar.view === "ro" ? roAutoSubmit() : drAutoSubmit();
   if (e.target.closest(".dr-again")) { dr.phase = "idle"; drRender(); return; }
+  if (e.target.closest(".ro-again")) { ro.phase = "idle"; roRender(); return; }
   if (e.target.closest(".pk-again")) {
     pk.score = 0; pk.submitted = false; pk.submitErr = false; pk.beatNote = null; pk.phase = "aim"; pk.busy = false;
     pkRender(); return;
