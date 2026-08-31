@@ -612,6 +612,22 @@
   .pk-board td.rk { width: 30px; color: var(--ink-2); }
   .pk-board .empty-note, .pk-board .pk-err { font-size: 12.5px; color: var(--muted); padding: 6px 0; }
 
+
+  /* --- Boot Room arcade menu + Breakaway --- */
+  .ar-menu { padding: 6px 16px 16px; display: grid; gap: 10px; }
+  .ar-game { display: flex; align-items: center; gap: 14px; border: none; cursor: pointer; text-align: left;
+    background: var(--surface-2); border-radius: 16px; padding: 14px 16px; }
+  .ar-game:active { background: var(--chip-bg); }
+  .ar-game .ar-ico { font-size: 30px; }
+  .ar-game .ar-txt { display: block; }
+  .ar-game .ar-name { display: block; font-weight: 800; font-size: 15px; color: var(--ink); }
+  .ar-game .ar-sub { display: block; font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+  .ar-foot { text-align: center; font-size: 11.5px; color: var(--muted); padding-top: 4px; }
+  .pk-back { border: none; background: var(--chip-bg); color: var(--ink-2); width: 30px; height: 30px;
+    border-radius: 50%; font-size: 18px; cursor: pointer; line-height: 1; padding-bottom: 3px; }
+  #drWrap { position: relative; background: #46943e; }
+  #drCanvas { display: block; width: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+
   /* --- Cinzel wordmark (header title only) --- */
   @font-face {
     font-family: 'Odyssey';
@@ -3140,17 +3156,97 @@ try {
 } catch {}
 
 /* ================================================================
-   PK SHOOTOUT — hidden mini-game. Double-tap the 🍻 in the footer.
-   Live leaderboard shared by everyone, stored in Supabase (public
-   anon key — safe to publish; the table is append-only via RLS).
+   THE BOOT ROOM — hidden arcade. Double-tap the 🍻 in the footer,
+   then pick a game. Leaderboards are shared by everyone, stored in
+   Supabase (public anon key — safe to publish; the table is
+   append-only via RLS, one 'game' column per leaderboard).
    ================================================================ */
 const PK_API = {
   url: "https://rdvstfufykzanzzhtavh.supabase.co",
   key: "sb_publishable_qDq5nyUwfEkm83-QXKzafg_dZS7aRhX",
 };
-const pk = { score: 0, phase: "idle", busy: false, submitted: false, board: null,
+const ar = { view: "menu" };
+const pk = { score: 0, phase: "idle", busy: false, submitted: false, beatNote: null, submitErr: false, board: null,
              best: parseInt(localStorage.getItem("loPkBest") || "0", 10) || 0 };
+const dr = { score: 0, goals: 0, phase: "idle", submitted: false, beatNote: null, submitErr: false, board: null,
+             best: parseInt(localStorage.getItem("loDrBest") || "0", 10) || 0 };
 
+/* ---------- shared leaderboard plumbing ---------- */
+async function arcadeFetchBoard(game) {
+  const base = `${PK_API.url}/rest/v1/pk_scores?select=name,score,created_at&order=score.desc,created_at.asc&limit=500`;
+  let res = await fetch(`${base}&game=eq.${game}`, { headers: { apikey: PK_API.key } });
+  if (!res.ok && game === "pk") res = await fetch(base, { headers: { apikey: PK_API.key } });   // before the game column exists
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const all = await res.json();
+  // one row per player: their highest score (earliest run wins a tie —
+  // rows arrive sorted, so the first time we see a name is their best)
+  const seen = new Map();
+  for (const r of all) if (!seen.has(r.name)) seen.set(r.name, r);
+  return [...seen.values()].slice(0, 10);
+}
+async function arcadePost(game, name, score) {
+  const post = (body) => fetch(`${PK_API.url}/rest/v1/pk_scores`, {
+    method: "POST",
+    headers: { apikey: PK_API.key, "Content-Type": "application/json", Prefer: "return=minimal" },
+    body: JSON.stringify(body),
+  });
+  let res = await post({ name, score: Math.min(score, 500), game });
+  if (!res.ok && game === "pk") res = await post({ name, score: Math.min(score, 500) });        // legacy table
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+function arcadeBoardHtml(board) {
+  const medals = ["🥇", "🥈", "🥉"];
+  if (board === null) return `<div class="empty-note">Loading leaderboard…</div>`;
+  if (board === "err") return `<div class="pk-err">Leaderboard unavailable right now — your run still counts here.</div>`;
+  if (!board.length) return `<div class="empty-note">No scores yet. Be the first.</div>`;
+  return `<table><tbody>${board.map((r, i) => `<tr>
+      <td class="rk">${medals[i] || i + 1}</td><td>${esc(r.name)}</td>
+      <td class="r">${r.score}</td>
+      <td class="r" style="color:var(--muted);font-weight:400">${r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : ""}</td>
+    </tr>`).join("")}</tbody></table>`;
+}
+function arcadeNames(cls) {
+  return PLAYERS.map(p => `<button class="${cls}" data-name="${esc(p.name)}" style="background:${accent(p)}">${esc(p.name)}</button>`).join("");
+}
+
+/* ---------- the arcade shell ---------- */
+function arcadeOpen() {
+  ar.view = "menu";
+  $("pkGame").hidden = false;
+  document.body.style.overflow = "hidden";
+  arcadeRender();
+}
+function arcadeClose() {
+  drStop();
+  $("pkGame").hidden = true;
+  document.body.style.overflow = "";
+  pk.phase = "idle"; dr.phase = "idle";
+}
+function arcadeMenu() {
+  drStop();
+  pk.phase = "idle"; dr.phase = "idle"; ar.view = "menu";
+  arcadeRender();
+}
+function arcadeRender() {
+  if (ar.view === "pk") return pkRender();
+  if (ar.view === "dr") return drRender();
+  const el = $("pkGame");
+  el.classList.remove("anim");
+  el.innerHTML = `<div class="pk-modal"><div class="pk-card">
+    <div class="pk-head"><span class="pk-title">🕹️ The Boot Room</span><button class="pk-x" aria-label="Close">✕</button></div>
+    <div class="ar-menu">
+      <button class="ar-game" data-game="pk"><span class="ar-ico">🥅</span>
+        <span class="ar-txt"><span class="ar-name">PK Shootout</span>
+        <span class="ar-sub">Pick a corner. The keeper learns your habits. · Best: ${pk.best}</span></span></button>
+      <button class="ar-game" data-game="dr"><span class="ar-ico">🏃</span>
+        <span class="ar-txt"><span class="ar-name">Breakaway</span>
+        <span class="ar-sub">Dribble upfield, dodge the tackles, score. · Best: ${dr.best}</span></span></button>
+      <div class="ar-foot">Found the Boot Room? Keep it between us. 🍻</div>
+    </div>
+  </div></div>`;
+}
+
+/* ---------- PK Shootout ---------- */
 function pkKeeperPick(shot) {
   // the keeper studies you: every goal makes him a little more likely to read the shot
   const pRead = Math.min(0.25 + 0.03 * pk.score, 0.60);
@@ -3158,28 +3254,19 @@ function pkKeeperPick(shot) {
   const others = [0, 1, 2, 3].filter(z => z !== shot);
   return others[Math.floor(Math.random() * 3)];
 }
-
 function pkOpen() {
-  pk.score = 0; pk.submitted = false; pk.beatNote = null; pk.phase = "aim"; pk.busy = false;
-  $("pkGame").hidden = false;
-  document.body.style.overflow = "hidden";
+  pk.score = 0; pk.submitted = false; pk.beatNote = null; pk.submitErr = false; pk.phase = "aim"; pk.busy = false;
+  ar.view = "pk";
   pkRender();
   pkLoadBoard();
 }
-function pkClose() {
-  $("pkGame").hidden = true;
-  document.body.style.overflow = "";
-  pk.phase = "idle";
-}
-
 function pkRender() {
   const el = $("pkGame");
   const over = pk.phase === "over";
-  const namesRow = PLAYERS.map(p =>
-    `<button class="pk-name" data-name="${esc(p.name)}" style="background:${accent(p)}">${esc(p.name)}</button>`).join("");
   el.classList.remove("anim");
   el.innerHTML = `<div class="pk-modal"><div class="pk-card">
-    <div class="pk-head"><span class="pk-title">⚽ PK Shootout</span>
+    <div class="pk-head"><button class="pk-back" aria-label="Back to games">‹</button>
+      <span class="pk-title">⚽ PK Shootout</span>
       <span class="pk-streak" id="pkStreak">Streak: ${pk.score}</span>
       <button class="pk-x" aria-label="Close">✕</button></div>
     <div class="pk-stage">
@@ -3194,7 +3281,7 @@ function pkRender() {
         <div class="pk-final">${pk.score === 0 ? "Saved on your first kick 💀" : `Run over — ${pk.score} in a row`}</div>
         <div class="pk-sub">Personal best on this phone: <b>${pk.best}</b></div>
         ${pk.score > 0 && !pk.submitted ? `<div class="pk-sub">Post it to the leaderboard as:</div>
-          <div class="pk-names">${namesRow}</div>` : ""}
+          <div class="pk-names">${arcadeNames("pk-name")}</div>` : ""}
         ${pk.submitted ? `<div class="pk-sub" style="color:var(--good)">✓ On the board.</div>` : ""}
         ${pk.beatNote ? `<div class="pk-sub" style="color:var(--bad)">${esc(pk.beatNote)}</div>` : ""}
         ${pk.submitErr ? `<div class="pk-sub" style="color:var(--bad)">Couldn't reach the leaderboard — try again.</div>` : ""}
@@ -3205,39 +3292,16 @@ function pkRender() {
   </div></div>`;
   pkRenderBoard();
 }
-
 function pkRenderBoard() {
   const el = $("pkBoard");
   if (!el) return;
-  const medals = ["🥇", "🥈", "🥉"];
-  let rows;
-  if (pk.board === null) rows = `<div class="empty-note">Loading leaderboard…</div>`;
-  else if (pk.board === "err") rows = `<div class="pk-err">Leaderboard unavailable right now — your run still counts here.</div>`;
-  else if (!pk.board.length) rows = `<div class="empty-note">No scores yet. Be the first.</div>`;
-  else rows = `<table><tbody>${pk.board.map((r, i) => `<tr>
-      <td class="rk">${medals[i] || i + 1}</td><td>${esc(r.name)}</td>
-      <td class="r">${r.score}</td>
-      <td class="r" style="color:var(--muted);font-weight:400">${r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : ""}</td>
-    </tr>`).join("")}</tbody></table>`;
-  el.innerHTML = `<h3>🏆 Leaderboard — each player&#39;s best</h3>${rows}`;
+  el.innerHTML = `<h3>🏆 Leaderboard — each player&#39;s best</h3>${arcadeBoardHtml(pk.board)}`;
 }
-
 async function pkLoadBoard() {
   pk.board = null; pkRenderBoard();
-  try {
-    const res = await fetch(`${PK_API.url}/rest/v1/pk_scores?select=name,score,created_at&order=score.desc,created_at.asc&limit=500`,
-      { headers: { apikey: PK_API.key } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const all = await res.json();
-    // one row per player: their highest score (earliest run wins a tie —
-    // rows arrive sorted, so the first time we see a name is their best)
-    const seen = new Map();
-    for (const r of all) if (!seen.has(r.name)) seen.set(r.name, r);
-    pk.board = [...seen.values()].slice(0, 10);
-  } catch (e) { pk.board = "err"; }
+  try { pk.board = await arcadeFetchBoard("pk"); } catch (e) { pk.board = "err"; }
   pkRenderBoard();
 }
-
 async function pkSubmit(name) {
   if (pk.submitted || pk.score < 1) return;
   // only a new personal high score changes the board — no repeat entries
@@ -3251,16 +3315,10 @@ async function pkSubmit(name) {
   try { localStorage.setItem("loPkName", name); } catch (e) {}
   pkRender();
   try {
-    const res = await fetch(`${PK_API.url}/rest/v1/pk_scores`, {
-      method: "POST",
-      headers: { apikey: PK_API.key, "Content-Type": "application/json", Prefer: "return=minimal" },
-      body: JSON.stringify({ name, score: Math.min(pk.score, 500) }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await arcadePost("pk", name, pk.score);
     await pkLoadBoard();
   } catch (e) { pk.submitted = false; pk.submitErr = true; pkRender(); }
 }
-
 function pkFlash(text, good) {
   const f = $("pkFlash");
   if (!f) return;
@@ -3268,7 +3326,6 @@ function pkFlash(text, good) {
   f.style.color = good ? "#7dffb8" : "#ffb3b3";
   f.classList.add("show");
 }
-
 function pkShoot(zone) {
   if (pk.phase !== "aim" || pk.busy) return;
   pk.busy = true;
@@ -3300,26 +3357,320 @@ function pkShoot(zone) {
   }, 480);
 }
 
+/* ---------- Breakaway (crossy-road dribbler) ---------- */
+const DR = { cols: 9, tile: 44 };
+let drW = null;   // live world while a run is on
+
+function drGenRow(r) {
+  if (r < 4) return { type: "grass", cones: [] };
+  if (r % 10 === 0) return { type: "goal", off: Math.random() * 6.28, speed: 46 + r * 0.5 + Math.random() * 20 };
+  const p = Math.random();
+  if (p < 0.30) {
+    const cones = [];
+    const n = Math.floor(Math.random() * 3);
+    while (cones.length < n) {
+      const c = Math.floor(Math.random() * DR.cols);
+      if (!cones.includes(c)) cones.push(c);
+    }
+    return { type: "grass", cones };
+  }
+  if (p < 0.44 && r > 8) return { type: "slide", dir: Math.random() < 0.5 ? -1 : 1,
+    speed: 230 + Math.random() * 130 + r * 1.1, off: Math.random() * 30, gapT: 1.6 + Math.random() * 1.8 };
+  return { type: "def", dir: Math.random() < 0.5 ? -1 : 1,
+    speed: (46 + Math.random() * 62) * (1 + Math.min(r * 0.006, 0.9)),
+    off: Math.random() * 12, spacing: 2.4 + Math.random() * 1.7,
+    jersey: ["#20449c", "#111417", "#7a1fa2", "#0b5ed1", "#3c3f43"][Math.floor(Math.random() * 5)] };
+}
+function drRowGet(r) {
+  if (!drW.rows.has(r)) drW.rows.set(r, drGenRow(r));
+  return drW.rows.get(r);
+}
+function drMovers(row, t) {
+  const T = DR.tile, W = drW.w;
+  const mod = (a, b) => ((a % b) + b) % b;
+  const out = [];
+  if (row.type === "def") {
+    const sp = row.spacing * T;
+    let x0 = mod(row.off * T + row.dir * row.speed * t, sp) - 1.5 * T;
+    for (let cx = x0; cx < W + 1.5 * T; cx += sp)
+      out.push({ x: cx - 0.36 * T, w: 0.72 * T, kind: "def", jersey: row.jersey });
+  } else if (row.type === "slide") {
+    const span = W + 3 * T, L = span * (1 + row.gapT);
+    const pos = mod(row.off * T + row.speed * t, L);
+    if (pos < span) {
+      const cx = row.dir > 0 ? pos - 1.5 * T : span - pos - 1.5 * T;
+      out.push({ x: cx - 1.1 * T, w: 2.2 * T, kind: "slide", dir: row.dir });
+    }
+  } else if (row.type === "goal") {
+    const cx = W / 2 + Math.sin(row.off + t * row.speed / 52) * (W / 2 - T);
+    out.push({ x: cx - 0.4 * T, w: 0.8 * T, kind: "keeper" });
+  }
+  return out;
+}
+
+function drOpen() {
+  ar.view = "dr";
+  dr.phase = "idle";
+  drRender();
+  drLoadBoard();
+}
+function drRender() {
+  const el = $("pkGame");
+  const over = dr.phase === "over";
+  el.classList.remove("anim");
+  el.innerHTML = `<div class="pk-modal"><div class="pk-card">
+    <div class="pk-head"><button class="pk-back" aria-label="Back to games">‹</button>
+      <span class="pk-title">🏃 Breakaway</span>
+      <span class="pk-streak" id="drChip">Row ${dr.score} · ⚽ ${dr.goals}</span>
+      <button class="pk-x" aria-label="Close">✕</button></div>
+    ${over ? `<div class="pk-over" style="padding-top:14px">
+        <div class="pk-final">${dr.endText || "Run over"} — <b>${dr.score}</b> rows${dr.goals ? ` · ${dr.goals} goal${dr.goals > 1 ? "s" : ""}` : ""}</div>
+        <div class="pk-sub">Personal best on this phone: <b>${dr.best}</b></div>
+        ${dr.score > 0 && !dr.submitted ? `<div class="pk-sub">Post it to the leaderboard as:</div>
+          <div class="pk-names">${arcadeNames("dr-name")}</div>` : ""}
+        ${dr.submitted ? `<div class="pk-sub" style="color:var(--good)">✓ On the board.</div>` : ""}
+        ${dr.beatNote ? `<div class="pk-sub" style="color:var(--bad)">${esc(dr.beatNote)}</div>` : ""}
+        ${dr.submitErr ? `<div class="pk-sub" style="color:var(--bad)">Couldn't reach the leaderboard — try again.</div>` : ""}
+        <div class="pk-actions"><button class="dr-again pk-again">Play again</button><button class="pk-quit">Close</button></div>
+      </div>`
+      : `<div id="drWrap"><canvas id="drCanvas"></canvas><div id="drFlash" class="pk-flash"></div></div>
+    <div class="pk-hint">Tap to dribble forward · swipe to cut sideways · every 10th row is a keeper to beat. Don't stall — the chasing pack catches you.</div>`}
+    <div class="pk-board" id="drBoard"></div>
+  </div></div>`;
+  drRenderBoard();
+  if (!over) drBoot();
+}
+function drRenderBoard() {
+  const el = $("drBoard");
+  if (!el) return;
+  el.innerHTML = `<h3>🏆 Leaderboard — each player&#39;s best</h3>${arcadeBoardHtml(dr.board)}`;
+}
+async function drLoadBoard() {
+  dr.board = null; drRenderBoard();
+  try { dr.board = await arcadeFetchBoard("dribble"); } catch (e) { dr.board = "err"; }
+  drRenderBoard();
+}
+async function drSubmit(name) {
+  if (dr.submitted || dr.score < 1) return;
+  const cur = Array.isArray(dr.board) ? dr.board.find(r => r.name === name) : null;
+  if (cur && dr.score <= cur.score) {
+    dr.beatNote = `${name}'s best is already ${cur.score} — beat it to change the board.`;
+    drRender(); return;
+  }
+  dr.beatNote = null;
+  dr.submitted = true; dr.submitErr = false;
+  try { localStorage.setItem("loPkName", name); } catch (e) {}
+  drRender();
+  try {
+    await arcadePost("dribble", name, dr.score);
+    await drLoadBoard();
+  } catch (e) { dr.submitted = false; dr.submitErr = true; drRender(); }
+}
+function drStop() {
+  if (drW) { cancelAnimationFrame(drW.raf); drW = null; }
+}
+function drBoot() {
+  const c = $("drCanvas");
+  if (!c) return;
+  const cssW = c.parentElement.clientWidth || 396;
+  DR.tile = cssW / DR.cols;
+  const cssH = Math.max(300, Math.min(470, Math.round(window.innerHeight * 0.5)));
+  const dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(cssW * dpr); c.height = Math.round(cssH * dpr);
+  c.style.height = cssH + "px";
+  const ctx = c.getContext("2d");
+  ctx.scale(dpr, dpr);
+  drStop();
+  dr.score = 0; dr.goals = 0; dr.submitted = false; dr.beatNote = null; dr.submitErr = false;
+  dr.endText = ""; dr.phase = "play";
+  drW = { ctx, w: cssW, h: cssH, rows: new Map(), t: 0, last: performance.now(),
+          cam: -1.4, lastGoal: 0, bumpT: 0, pd: null,
+          player: { col: Math.floor(DR.cols / 2), row: 0, fCol: Math.floor(DR.cols / 2), fRow: 0, hopA: null } };
+  c.addEventListener("pointerdown", (e) => { if (drW) { drW.pd = { x: e.clientX, y: e.clientY }; e.preventDefault(); } });
+  c.addEventListener("pointerup", (e) => {
+    if (!drW || !drW.pd) return;
+    const dx = e.clientX - drW.pd.x, dy = e.clientY - drW.pd.y;
+    drW.pd = null;
+    if (Math.abs(dx) > 26 && Math.abs(dx) > Math.abs(dy)) drHop(dx > 0 ? 1 : -1, 0);
+    else if (dy > 26) drHop(0, -1);
+    else drHop(0, 1);
+  });
+  drW.raf = requestAnimationFrame(drFrame);
+}
+function drHop(dc, drow) {
+  if (dr.phase !== "play" || !drW || drW.player.hopA) return;
+  const p = drW.player;
+  const nc = Math.max(0, Math.min(DR.cols - 1, p.col + dc));
+  const nr = Math.max(Math.max(0, Math.ceil(drW.cam)), p.row + drow);   // can't hop behind the camera
+  if (nc === p.col && nr === p.row) return;
+  const row = drRowGet(nr);
+  if (row.cones && row.cones.includes(nc)) { drW.bumpT = 0.18; return; }   // cone in the way
+  p.hopA = { fc: p.col, fr: p.row, s: drW.t };
+  p.col = nc; p.row = nr;
+}
+function drHopDone() {
+  const p = drW.player;
+  p.hopA = null;
+  if (p.row > dr.score) {
+    dr.score = p.row;
+    const chip = $("drChip"); if (chip) chip.textContent = `Row ${dr.score} · ⚽ ${dr.goals}`;
+  }
+  const behind = p.row - 1;
+  if (behind >= 10 && behind % 10 === 0 && behind > drW.lastGoal) {
+    drW.lastGoal = behind;
+    dr.goals++;
+    const chip = $("drChip"); if (chip) chip.textContent = `Row ${dr.score} · ⚽ ${dr.goals}`;
+    drFlash("GOAL!", true);
+    setTimeout(() => { const f = $("drFlash"); if (f) f.classList.remove("show"); }, 700);
+  }
+}
+function drFlash(text, good) {
+  const f = $("drFlash");
+  if (!f) return;
+  f.textContent = text;
+  f.style.color = good ? "#7dffb8" : "#ffb3b3";
+  f.classList.add("show");
+}
+function drEnd(kind) {
+  if (dr.phase !== "play") return;
+  dr.phase = "over";
+  cancelAnimationFrame(drW.raf);
+  if (dr.score > dr.best) {
+    dr.best = dr.score;
+    try { localStorage.setItem("loDrBest", String(dr.best)); } catch (e) {}
+  }
+  dr.endText = kind === "keeper" ? "Smothered by the keeper" : kind === "slide" ? "Wiped out by a slide tackle"
+    : kind === "swept" ? "Caught from behind" : "Dispossessed";
+  drFlash(kind === "swept" ? "CAUGHT!" : "TACKLED!", false);
+  setTimeout(() => { if (dr.phase === "over" && ar.view === "dr") drRender(); }, 900);
+}
+function drFrame(ts) {
+  if (!drW || dr.phase !== "play") return;
+  const w = drW, p = w.player, T = DR.tile;
+  const dt = Math.min((ts - w.last) / 1000, 0.05);
+  w.last = ts; w.t += dt;
+  if (w.bumpT > 0) w.bumpT -= dt;
+  // hop tween (110ms), with a little bounce
+  if (p.hopA) {
+    const k = Math.min((w.t - p.hopA.s) / 0.11, 1);
+    p.fCol = p.hopA.fc + (p.col - p.hopA.fc) * k;
+    p.fRow = p.hopA.fr + (p.row - p.hopA.fr) * k;
+    if (k >= 1) drHopDone();
+  } else { p.fCol = p.col; p.fRow = p.row; }
+  // the chasing pack: camera creeps forward, faster the deeper you go
+  w.cam += dt * (0.40 + Math.max(0, p.row) * 0.007);
+  w.cam = Math.max(w.cam, p.fRow - 6.5);
+  if (p.fRow < w.cam - 0.1) return drEnd("swept");
+  // collisions on the row the player is (mostly) on
+  const rr = Math.round(p.fRow);
+  const px = (p.fCol + 0.5) * T;
+  for (const o of drMovers(drRowGet(rr), w.t)) {
+    if (Math.abs(o.x + o.w / 2 - px) < o.w / 2 + T * 0.26) return drEnd(o.kind === "keeper" ? "keeper" : o.kind);
+  }
+  drDraw();
+  w.raf = requestAnimationFrame(drFrame);
+}
+function drDraw() {
+  const w = drW, { ctx } = w, T = DR.tile, p = w.player;
+  const yOf = (r) => w.h - (r - w.cam + 1) * T;
+  ctx.save();
+  if (w.bumpT > 0) ctx.translate(Math.sin(w.bumpT * 90) * 3, 0);
+  const r0 = Math.floor(w.cam) - 1, r1 = Math.ceil(w.cam + w.h / T) + 1;
+  for (let r = r0; r <= r1; r++) {
+    const y = yOf(r);
+    const row = r >= 0 ? drRowGet(r) : { type: "grass", cones: [] };
+    ctx.fillStyle = row.type === "goal" ? "#58a850" : (((r % 2) + 2) % 2 ? "#4e9c45" : "#46943e");
+    ctx.fillRect(0, y, w.w, T + 0.5);
+    if (row.type === "goal") {
+      ctx.fillStyle = "rgba(255,255,255,0.28)"; ctx.fillRect(0, y + 2, w.w, 5);
+      ctx.fillStyle = "rgba(255,255,255,0.9)";  ctx.fillRect(0, y + T - 4, w.w, 3);
+    }
+    for (const ccol of (row.cones || [])) {
+      const cx = (ccol + 0.5) * T, cy = y + T * 0.5;
+      ctx.fillStyle = "#e8752a";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - T * 0.26); ctx.lineTo(cx - T * 0.2, cy + T * 0.22); ctx.lineTo(cx + T * 0.2, cy + T * 0.22);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.fillRect(cx - T * 0.11, cy - T * 0.02, T * 0.22, T * 0.07);
+    }
+    for (const o of drMovers(row, w.t)) {
+      if (o.kind === "def") {
+        ctx.fillStyle = o.jersey;
+        drRounded(ctx, o.x, y + T * 0.30, o.w, T * 0.48, 6); ctx.fill();
+        ctx.fillStyle = "#e8b98a";
+        ctx.beginPath(); ctx.arc(o.x + o.w / 2, y + T * 0.22, T * 0.14, 0, 7); ctx.fill();
+      } else if (o.kind === "slide") {
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        drRounded(ctx, o.x - (o.dir > 0 ? T * 0.9 : -T * 0.9), y + T * 0.55, o.w, T * 0.2, 5); ctx.fill();
+        ctx.fillStyle = "#eef2f0";
+        drRounded(ctx, o.x, y + T * 0.42, o.w, T * 0.34, 8); ctx.fill();
+        ctx.fillStyle = "#e8b98a";
+        ctx.beginPath(); ctx.arc(o.dir > 0 ? o.x + o.w - T * 0.1 : o.x + T * 0.1, y + T * 0.38, T * 0.14, 0, 7); ctx.fill();
+      } else if (o.kind === "keeper") {
+        ctx.fillStyle = "#ff9f1c";
+        drRounded(ctx, o.x, y + T * 0.28, o.w, T * 0.5, 7); ctx.fill();
+        ctx.fillStyle = "#e8b98a";
+        ctx.beginPath(); ctx.arc(o.x + o.w / 2, y + T * 0.2, T * 0.15, 0, 7); ctx.fill();
+      }
+    }
+  }
+  // the player, dribbling
+  const hop = p.hopA ? Math.sin(Math.min((w.t - p.hopA.s) / 0.11, 1) * Math.PI) * T * 0.18 : 0;
+  const x = (p.fCol + 0.5) * T, y = yOf(p.fRow) - hop;
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.beginPath(); ctx.ellipse(x, yOf(p.fRow) + T * 0.82, T * 0.24, T * 0.08, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = "#d23b3b";
+  drRounded(ctx, x - T * 0.19, y + T * 0.30, T * 0.38, T * 0.42, 6); ctx.fill();
+  ctx.fillStyle = "#2a2e33"; ctx.fillRect(x - T * 0.16, y + T * 0.66, T * 0.32, T * 0.12);
+  ctx.fillStyle = "#e8b98a";
+  ctx.beginPath(); ctx.arc(x, y + T * 0.20, T * 0.15, 0, 7); ctx.fill();
+  ctx.font = `${Math.round(T * 0.34)}px serif`;
+  ctx.fillText("⚽", x + T * 0.14, y + T * 0.90);
+  ctx.restore();
+}
+function drRounded(ctx, x, y, w2, h2, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w2, y, x + w2, y + h2, r); ctx.arcTo(x + w2, y + h2, x, y + h2, r);
+  ctx.arcTo(x, y + h2, x, y, r); ctx.arcTo(x, y, x + w2, y, r);
+  ctx.closePath();
+}
+
+/* ---------- shared input wiring ---------- */
 $("pkGame").addEventListener("click", (e) => {
+  const g = e.target.closest(".ar-game");
+  if (g) return g.dataset.game === "pk" ? pkOpen() : drOpen();
   const zone = e.target.closest(".pk-zone");
   if (zone) return pkShoot(parseInt(zone.dataset.z, 10));
-  const name = e.target.closest(".pk-name");
-  if (name) return pkSubmit(name.dataset.name);
+  const pn = e.target.closest(".pk-name");
+  if (pn) return pkSubmit(pn.dataset.name);
+  const dn = e.target.closest(".dr-name");
+  if (dn) return drSubmit(dn.dataset.name);
+  if (e.target.closest(".dr-again")) { dr.phase = "idle"; drRender(); return; }
   if (e.target.closest(".pk-again")) {
     pk.score = 0; pk.submitted = false; pk.submitErr = false; pk.beatNote = null; pk.phase = "aim"; pk.busy = false;
     pkRender(); return;
   }
-  if (e.target.closest(".pk-x") || e.target.closest(".pk-quit")) return pkClose();
-  if (!e.target.closest(".pk-card")) return pkClose();   // tap the dark backdrop to leave
+  if (e.target.closest(".pk-back")) return arcadeMenu();
+  if (e.target.closest(".pk-x") || e.target.closest(".pk-quit")) return arcadeClose();
+  if (!e.target.closest(".pk-card")) return arcadeClose();   // tap the dark backdrop to leave
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("pkGame").hidden) pkClose(); });
+document.addEventListener("keydown", (e) => {
+  if ($("pkGame").hidden) return;
+  if (e.key === "Escape") return arcadeClose();
+  if (ar.view !== "dr" || dr.phase !== "play") return;
+  const map = { ArrowUp: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowDown: [0, -1],
+                w: [0, 1], a: [-1, 0], d: [1, 0], s: [0, -1] };
+  const m = map[e.key];
+  if (m) { e.preventDefault(); drHop(m[0], m[1]); }
+});
 
 // The easter egg: double-tap the beers in the footer.
 (() => {
   let lastTap = 0;
   $("pkEgg").addEventListener("click", () => {
     const now = Date.now();
-    if (now - lastTap < 450) { lastTap = 0; pkOpen(); }
+    if (now - lastTap < 450) { lastTap = 0; arcadeOpen(); }
     else lastTap = now;
   });
 })();
