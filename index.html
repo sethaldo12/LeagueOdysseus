@@ -3160,7 +3160,7 @@ function pkKeeperPick(shot) {
 }
 
 function pkOpen() {
-  pk.score = 0; pk.submitted = false; pk.phase = "aim"; pk.busy = false;
+  pk.score = 0; pk.submitted = false; pk.beatNote = null; pk.phase = "aim"; pk.busy = false;
   $("pkGame").hidden = false;
   document.body.style.overflow = "hidden";
   pkRender();
@@ -3196,6 +3196,7 @@ function pkRender() {
         ${pk.score > 0 && !pk.submitted ? `<div class="pk-sub">Post it to the leaderboard as:</div>
           <div class="pk-names">${namesRow}</div>` : ""}
         ${pk.submitted ? `<div class="pk-sub" style="color:var(--good)">✓ On the board.</div>` : ""}
+        ${pk.beatNote ? `<div class="pk-sub" style="color:var(--bad)">${esc(pk.beatNote)}</div>` : ""}
         ${pk.submitErr ? `<div class="pk-sub" style="color:var(--bad)">Couldn't reach the leaderboard — try again.</div>` : ""}
         <div class="pk-actions"><button class="pk-again">Play again</button><button class="pk-quit">Close</button></div>
       </div>`
@@ -3218,22 +3219,34 @@ function pkRenderBoard() {
       <td class="r">${r.score}</td>
       <td class="r" style="color:var(--muted);font-weight:400">${r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : ""}</td>
     </tr>`).join("")}</tbody></table>`;
-  el.innerHTML = `<h3>🏆 All-time leaderboard</h3>${rows}`;
+  el.innerHTML = `<h3>🏆 Leaderboard — each player&#39;s best</h3>${rows}`;
 }
 
 async function pkLoadBoard() {
   pk.board = null; pkRenderBoard();
   try {
-    const res = await fetch(`${PK_API.url}/rest/v1/pk_scores?select=name,score,created_at&order=score.desc,created_at.asc&limit=10`,
+    const res = await fetch(`${PK_API.url}/rest/v1/pk_scores?select=name,score,created_at&order=score.desc,created_at.asc&limit=500`,
       { headers: { apikey: PK_API.key } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    pk.board = await res.json();
+    const all = await res.json();
+    // one row per player: their highest score (earliest run wins a tie —
+    // rows arrive sorted, so the first time we see a name is their best)
+    const seen = new Map();
+    for (const r of all) if (!seen.has(r.name)) seen.set(r.name, r);
+    pk.board = [...seen.values()].slice(0, 10);
   } catch (e) { pk.board = "err"; }
   pkRenderBoard();
 }
 
 async function pkSubmit(name) {
   if (pk.submitted || pk.score < 1) return;
+  // only a new personal high score changes the board — no repeat entries
+  const cur = Array.isArray(pk.board) ? pk.board.find(r => r.name === name) : null;
+  if (cur && pk.score <= cur.score) {
+    pk.beatNote = `${name}'s best is already ${cur.score} — beat it to change the board.`;
+    pkRender(); return;
+  }
+  pk.beatNote = null;
   pk.submitted = true; pk.submitErr = false;
   try { localStorage.setItem("loPkName", name); } catch (e) {}
   pkRender();
@@ -3293,7 +3306,7 @@ $("pkGame").addEventListener("click", (e) => {
   const name = e.target.closest(".pk-name");
   if (name) return pkSubmit(name.dataset.name);
   if (e.target.closest(".pk-again")) {
-    pk.score = 0; pk.submitted = false; pk.submitErr = false; pk.phase = "aim"; pk.busy = false;
+    pk.score = 0; pk.submitted = false; pk.submitErr = false; pk.beatNote = null; pk.phase = "aim"; pk.busy = false;
     pkRender(); return;
   }
   if (e.target.closest(".pk-x") || e.target.closest(".pk-quit")) return pkClose();
