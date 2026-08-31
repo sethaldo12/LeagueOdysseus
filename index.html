@@ -550,8 +550,9 @@
   .pk-card { background: var(--surface); border-radius: 20px; box-shadow: 0 12px 40px rgba(0,0,0,0.4); overflow: hidden; }
   .pk-head { display: flex; align-items: center; gap: 10px; padding: 13px 16px; }
   .pk-head .pk-title { font-weight: 800; font-size: 16px; letter-spacing: 0.01em; }
-  .pk-head .pk-streak { margin-left: auto; font-weight: 700; font-size: 13.5px; color: var(--ink-2);
-    background: var(--chip-bg); border-radius: 20px; padding: 4px 12px; }
+  .pk-head .pk-streak { margin-left: auto; font-weight: 700; font-size: 12.5px; color: var(--ink-2);
+    background: var(--chip-bg); border-radius: 20px; padding: 4px 11px; white-space: nowrap; }
+  .pk-head .pk-title { white-space: nowrap; }
   .pk-head .pk-x { border: none; background: var(--chip-bg); color: var(--ink-2); width: 30px; height: 30px;
     border-radius: 50%; font-size: 15px; cursor: pointer; line-height: 1; }
   .pk-stage { position: relative; height: 270px; overflow: hidden;
@@ -614,6 +615,12 @@
 
 
   /* --- Boot Room arcade menu + Breakaway --- */
+  .ar-who { padding: 4px 16px 2px; }
+  .ar-who-label { text-align: center; font-size: 11.5px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--ink-2); margin-bottom: 8px; }
+  .ar-who.need .ar-who-label { color: var(--bad); }
+  .ar-who .pk-name { opacity: 0.45; transition: opacity 0.15s, box-shadow 0.15s; }
+  .ar-who .pk-name.sel { opacity: 1; box-shadow: 0 0 0 2.5px var(--surface), 0 0 0 5px var(--ink); }
   .ar-menu { padding: 6px 16px 16px; display: grid; gap: 10px; }
   .ar-game { display: flex; align-items: center; gap: 14px; border: none; cursor: pointer; text-align: left;
     background: var(--surface-2); border-radius: 16px; padding: 14px 16px; }
@@ -3165,7 +3172,9 @@ const PK_API = {
   url: "https://rdvstfufykzanzzhtavh.supabase.co",
   key: "sb_publishable_qDq5nyUwfEkm83-QXKzafg_dZS7aRhX",
 };
-const ar = { view: "menu" };
+const ar = { view: "menu",
+  player: (() => { try { return localStorage.getItem("loPkName") || null; } catch (e) { return null; } })() };
+function arPlayerObj() { return PLAYERS.find(p => p.name === ar.player) || null; }
 const pk = { score: 0, phase: "idle", busy: false, submitted: false, beatNote: null, submitErr: false, board: null,
              best: parseInt(localStorage.getItem("loPkBest") || "0", 10) || 0 };
 const dr = { score: 0, goals: 0, phase: "idle", submitted: false, beatNote: null, submitErr: false, board: null,
@@ -3206,7 +3215,7 @@ function arcadeBoardHtml(board) {
     </tr>`).join("")}</tbody></table>`;
 }
 function arcadeNames(cls) {
-  return PLAYERS.map(p => `<button class="${cls}" data-name="${esc(p.name)}" style="background:${accent(p)}">${esc(p.name)}</button>`).join("");
+  return PLAYERS.map(p => `<button class="${cls}${p.name === ar.player ? " sel" : ""}" data-name="${esc(p.name)}" style="background:${accent(p)}">${esc(p.name)}</button>`).join("");
 }
 
 /* ---------- the arcade shell ---------- */
@@ -3234,6 +3243,8 @@ function arcadeRender() {
   el.classList.remove("anim");
   el.innerHTML = `<div class="pk-modal"><div class="pk-card">
     <div class="pk-head"><span class="pk-title">🕹️ The Boot Room</span><button class="pk-x" aria-label="Close">✕</button></div>
+    <div class="ar-who" id="arWho"><div class="ar-who-label">Who&#39;s playing?</div>
+      <div class="pk-names">${arcadeNames("ar-pick pk-name")}</div></div>
     <div class="ar-menu">
       <button class="ar-game" data-game="pk"><span class="ar-ico">🥅</span>
         <span class="ar-txt"><span class="ar-name">PK Shootout</span>
@@ -3267,7 +3278,7 @@ function pkRender() {
   el.innerHTML = `<div class="pk-modal"><div class="pk-card">
     <div class="pk-head"><button class="pk-back" aria-label="Back to games">‹</button>
       <span class="pk-title">⚽ PK Shootout</span>
-      <span class="pk-streak" id="pkStreak">Streak: ${pk.score}</span>
+      <span class="pk-streak" id="pkStreak" style="background:${accent(arPlayerObj())};color:#fff">${esc(ar.player || "")} · Streak: ${pk.score}</span>
       <button class="pk-x" aria-label="Close">✕</button></div>
     <div class="pk-stage">
       <div class="pk-goal">
@@ -3280,11 +3291,9 @@ function pkRender() {
     ${over ? `<div class="pk-over">
         <div class="pk-final">${pk.score === 0 ? "Saved on your first kick 💀" : `Run over — ${pk.score} in a row`}</div>
         <div class="pk-sub">Personal best on this phone: <b>${pk.best}</b></div>
-        ${pk.score > 0 && !pk.submitted ? `<div class="pk-sub">Post it to the leaderboard as:</div>
-          <div class="pk-names">${arcadeNames("pk-name")}</div>` : ""}
-        ${pk.submitted ? `<div class="pk-sub" style="color:var(--good)">✓ On the board.</div>` : ""}
+        ${pk.submitted ? `<div class="pk-sub" style="color:var(--good)">✓ On the board as ${esc(ar.player || "")}.</div>` : ""}
         ${pk.beatNote ? `<div class="pk-sub" style="color:var(--bad)">${esc(pk.beatNote)}</div>` : ""}
-        ${pk.submitErr ? `<div class="pk-sub" style="color:var(--bad)">Couldn't reach the leaderboard — try again.</div>` : ""}
+        ${pk.submitErr ? `<div class="pk-sub" style="color:var(--bad)">Couldn't reach the leaderboard. <button class="pk-retry">Retry</button></div>` : ""}
         <div class="pk-actions"><button class="pk-again">Play again</button><button class="pk-quit">Close</button></div>
       </div>`
       : `<div class="pk-hint">Pick a corner. One save ends the run — and the keeper learns your habits.</div>`}
@@ -3302,22 +3311,27 @@ async function pkLoadBoard() {
   try { pk.board = await arcadeFetchBoard("pk"); } catch (e) { pk.board = "err"; }
   pkRenderBoard();
 }
-async function pkSubmit(name) {
-  if (pk.submitted || pk.score < 1) return;
-  // only a new personal high score changes the board — no repeat entries
-  const cur = Array.isArray(pk.board) ? pk.board.find(r => r.name === name) : null;
-  if (cur && pk.score <= cur.score) {
-    pk.beatNote = `${name}'s best is already ${cur.score} — beat it to change the board.`;
+async function pkAutoSubmit() {
+  // posts by itself when the run ends — but only a new personal high score
+  // changes the board, so a lesser run is politely declined
+  if (pk.submitted || pk.score < 1 || !ar.player) return;
+  pk.submitErr = false; pk.beatNote = null;
+  let best = null;
+  try {
+    const board = Array.isArray(pk.board) ? pk.board : await arcadeFetchBoard("pk");
+    const cur = board.find(r => r.name === ar.player);
+    best = cur ? cur.score : 0;
+  } catch (e) { best = null; }   // board unreachable — post anyway; the board only ever shows bests
+  if (best !== null && best > 0 && pk.score <= best) {
+    pk.beatNote = `${ar.player}'s best is already ${best} — beat it to change the board.`;
     pkRender(); return;
   }
-  pk.beatNote = null;
-  pk.submitted = true; pk.submitErr = false;
-  try { localStorage.setItem("loPkName", name); } catch (e) {}
-  pkRender();
   try {
-    await arcadePost("pk", name, pk.score);
-    await pkLoadBoard();
-  } catch (e) { pk.submitted = false; pk.submitErr = true; pkRender(); }
+    await arcadePost("pk", ar.player, pk.score);
+    pk.submitted = true;
+    pkRender();
+    pkLoadBoard();
+  } catch (e) { pk.submitErr = true; pkRender(); }
 }
 function pkFlash(text, good) {
   const f = $("pkFlash");
@@ -3337,7 +3351,7 @@ function pkShoot(zone) {
   setTimeout(() => {
     if (goal) {
       pk.score++;
-      const s = $("pkStreak"); if (s) s.textContent = `Streak: ${pk.score}`;
+      const s = $("pkStreak"); if (s) s.textContent = `${ar.player} · Streak: ${pk.score}`;
       pkFlash("GOAL!", true);
       setTimeout(() => {
         const f = $("pkFlash"); if (f) f.classList.remove("show");
@@ -3352,7 +3366,7 @@ function pkShoot(zone) {
         try { localStorage.setItem("loPkBest", String(pk.best)); } catch (e) {}
       }
       pkFlash("SAVED", false);
-      setTimeout(() => { pk.phase = "over"; pk.busy = false; pkRender(); }, 850);
+      setTimeout(() => { pk.phase = "over"; pk.busy = false; pkRender(); pkAutoSubmit(); }, 850);
     }
   }, 480);
 }
@@ -3421,16 +3435,14 @@ function drRender() {
   el.innerHTML = `<div class="pk-modal"><div class="pk-card">
     <div class="pk-head"><button class="pk-back" aria-label="Back to games">‹</button>
       <span class="pk-title">🏃 Breakaway</span>
-      <span class="pk-streak" id="drChip">Row ${dr.score} · ⚽ ${dr.goals}</span>
+      <span class="pk-streak" id="drChip" style="background:${accent(arPlayerObj())};color:#fff">${esc(ar.player || "")} · Row ${dr.score} · ⚽ ${dr.goals}</span>
       <button class="pk-x" aria-label="Close">✕</button></div>
     ${over ? `<div class="pk-over" style="padding-top:14px">
         <div class="pk-final">${dr.endText || "Run over"} — <b>${dr.score}</b> rows${dr.goals ? ` · ${dr.goals} goal${dr.goals > 1 ? "s" : ""}` : ""}</div>
         <div class="pk-sub">Personal best on this phone: <b>${dr.best}</b></div>
-        ${dr.score > 0 && !dr.submitted ? `<div class="pk-sub">Post it to the leaderboard as:</div>
-          <div class="pk-names">${arcadeNames("dr-name")}</div>` : ""}
-        ${dr.submitted ? `<div class="pk-sub" style="color:var(--good)">✓ On the board.</div>` : ""}
+        ${dr.submitted ? `<div class="pk-sub" style="color:var(--good)">✓ On the board as ${esc(ar.player || "")}.</div>` : ""}
         ${dr.beatNote ? `<div class="pk-sub" style="color:var(--bad)">${esc(dr.beatNote)}</div>` : ""}
-        ${dr.submitErr ? `<div class="pk-sub" style="color:var(--bad)">Couldn't reach the leaderboard — try again.</div>` : ""}
+        ${dr.submitErr ? `<div class="pk-sub" style="color:var(--bad)">Couldn't reach the leaderboard. <button class="pk-retry">Retry</button></div>` : ""}
         <div class="pk-actions"><button class="dr-again pk-again">Play again</button><button class="pk-quit">Close</button></div>
       </div>`
       : `<div id="drWrap"><canvas id="drCanvas"></canvas><div id="drFlash" class="pk-flash"></div></div>
@@ -3450,21 +3462,25 @@ async function drLoadBoard() {
   try { dr.board = await arcadeFetchBoard("dribble"); } catch (e) { dr.board = "err"; }
   drRenderBoard();
 }
-async function drSubmit(name) {
-  if (dr.submitted || dr.score < 1) return;
-  const cur = Array.isArray(dr.board) ? dr.board.find(r => r.name === name) : null;
-  if (cur && dr.score <= cur.score) {
-    dr.beatNote = `${name}'s best is already ${cur.score} — beat it to change the board.`;
+async function drAutoSubmit() {
+  if (dr.submitted || dr.score < 1 || !ar.player) return;
+  dr.submitErr = false; dr.beatNote = null;
+  let best = null;
+  try {
+    const board = Array.isArray(dr.board) ? dr.board : await arcadeFetchBoard("dribble");
+    const cur = board.find(r => r.name === ar.player);
+    best = cur ? cur.score : 0;
+  } catch (e) { best = null; }
+  if (best !== null && best > 0 && dr.score <= best) {
+    dr.beatNote = `${ar.player}'s best is already ${best} — beat it to change the board.`;
     drRender(); return;
   }
-  dr.beatNote = null;
-  dr.submitted = true; dr.submitErr = false;
-  try { localStorage.setItem("loPkName", name); } catch (e) {}
-  drRender();
   try {
-    await arcadePost("dribble", name, dr.score);
-    await drLoadBoard();
-  } catch (e) { dr.submitted = false; dr.submitErr = true; drRender(); }
+    await arcadePost("dribble", ar.player, dr.score);
+    dr.submitted = true;
+    drRender();
+    drLoadBoard();
+  } catch (e) { dr.submitErr = true; drRender(); }
 }
 function drStop() {
   if (drW) { cancelAnimationFrame(drW.raf); drW = null; }
@@ -3474,7 +3490,7 @@ function drBoot() {
   if (!c) return;
   const cssW = c.parentElement.clientWidth || 396;
   DR.tile = cssW / DR.cols;
-  const cssH = Math.max(300, Math.min(470, Math.round(window.innerHeight * 0.5)));
+  const cssH = Math.max(340, Math.min(640, Math.round(window.innerHeight * 0.62)));
   const dpr = window.devicePixelRatio || 1;
   c.width = Math.round(cssW * dpr); c.height = Math.round(cssH * dpr);
   c.style.height = cssH + "px";
@@ -3513,13 +3529,13 @@ function drHopDone() {
   p.hopA = null;
   if (p.row > dr.score) {
     dr.score = p.row;
-    const chip = $("drChip"); if (chip) chip.textContent = `Row ${dr.score} · ⚽ ${dr.goals}`;
+    const chip = $("drChip"); if (chip) chip.textContent = `${ar.player} · Row ${dr.score} · ⚽ ${dr.goals}`;
   }
   const behind = p.row - 1;
   if (behind >= 10 && behind % 10 === 0 && behind > drW.lastGoal) {
     drW.lastGoal = behind;
     dr.goals++;
-    const chip = $("drChip"); if (chip) chip.textContent = `Row ${dr.score} · ⚽ ${dr.goals}`;
+    const chip = $("drChip"); if (chip) chip.textContent = `${ar.player} · Row ${dr.score} · ⚽ ${dr.goals}`;
     drFlash("GOAL!", true);
     setTimeout(() => { const f = $("drFlash"); if (f) f.classList.remove("show"); }, 700);
   }
@@ -3542,7 +3558,7 @@ function drEnd(kind) {
   dr.endText = kind === "keeper" ? "Smothered by the keeper" : kind === "slide" ? "Wiped out by a slide tackle"
     : kind === "swept" ? "Caught from behind" : "Dispossessed";
   drFlash(kind === "swept" ? "CAUGHT!" : "TACKLED!", false);
-  setTimeout(() => { if (dr.phase === "over" && ar.view === "dr") drRender(); }, 900);
+  setTimeout(() => { if (dr.phase === "over" && ar.view === "dr") { drRender(); drAutoSubmit(); } }, 900);
 }
 function drFrame(ts) {
   if (!drW || dr.phase !== "play") return;
@@ -3638,14 +3654,20 @@ function drRounded(ctx, x, y, w2, h2, r) {
 
 /* ---------- shared input wiring ---------- */
 $("pkGame").addEventListener("click", (e) => {
+  const pick = e.target.closest(".ar-pick");
+  if (pick) {
+    ar.player = pick.dataset.name;
+    try { localStorage.setItem("loPkName", ar.player); } catch (err) {}
+    arcadeRender(); return;
+  }
   const g = e.target.closest(".ar-game");
-  if (g) return g.dataset.game === "pk" ? pkOpen() : drOpen();
+  if (g) {
+    if (!ar.player) { const w = $("arWho"); if (w) w.classList.add("need"); return; }
+    return g.dataset.game === "pk" ? pkOpen() : drOpen();
+  }
   const zone = e.target.closest(".pk-zone");
   if (zone) return pkShoot(parseInt(zone.dataset.z, 10));
-  const pn = e.target.closest(".pk-name");
-  if (pn) return pkSubmit(pn.dataset.name);
-  const dn = e.target.closest(".dr-name");
-  if (dn) return drSubmit(dn.dataset.name);
+  if (e.target.closest(".pk-retry")) return ar.view === "pk" ? pkAutoSubmit() : drAutoSubmit();
   if (e.target.closest(".dr-again")) { dr.phase = "idle"; drRender(); return; }
   if (e.target.closest(".pk-again")) {
     pk.score = 0; pk.submitted = false; pk.submitErr = false; pk.beatNote = null; pk.phase = "aim"; pk.busy = false;
