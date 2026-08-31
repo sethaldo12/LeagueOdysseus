@@ -542,6 +542,76 @@
   .loading { color: var(--muted); font-size: 14px; padding: 30px 10px; text-align: center; }
   footer.pagefoot { margin-top: 28px; color: var(--muted); font-size: 12px; text-align: center; }
 
+  /* --- PK Shootout (hidden mini-game) --- */
+  #pkEgg { cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  #pkGame { position: fixed; inset: 0; z-index: 300; overflow-y: auto; overscroll-behavior: contain;
+            background: rgba(8, 12, 10, 0.82); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+  .pk-modal { max-width: 470px; margin: 4vh auto 40px; padding: 0 12px; }
+  .pk-card { background: var(--surface); border-radius: 20px; box-shadow: 0 12px 40px rgba(0,0,0,0.4); overflow: hidden; }
+  .pk-head { display: flex; align-items: center; gap: 10px; padding: 13px 16px; }
+  .pk-head .pk-title { font-weight: 800; font-size: 16px; letter-spacing: 0.01em; }
+  .pk-head .pk-streak { margin-left: auto; font-weight: 700; font-size: 13.5px; color: var(--ink-2);
+    background: var(--chip-bg); border-radius: 20px; padding: 4px 12px; }
+  .pk-head .pk-x { border: none; background: var(--chip-bg); color: var(--ink-2); width: 30px; height: 30px;
+    border-radius: 50%; font-size: 15px; cursor: pointer; line-height: 1; }
+  .pk-stage { position: relative; height: 270px; overflow: hidden;
+    background: repeating-linear-gradient(180deg, #4e9c45 0 27px, #46943e 27px 54px); }
+  .pk-goal { position: absolute; left: 9%; right: 9%; top: 26px; height: 148px;
+    border: 6px solid #f6f8f7; border-bottom: none; border-radius: 4px 4px 0 0;
+    background-image:
+      repeating-linear-gradient(0deg,  rgba(255,255,255,0.30) 0 1px, transparent 1px 13px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.30) 0 1px, transparent 1px 13px);
+    background-color: rgba(20, 40, 24, 0.25); }
+  .pk-keeper { position: absolute; left: 50%; bottom: 2px; width: 46px; height: 74px; margin-left: -23px;
+    transition: transform 0.4s cubic-bezier(0.3, 0.9, 0.4, 1); transform-origin: 50% 85%; z-index: 2; }
+  .pk-keeper .k-head { width: 20px; height: 20px; border-radius: 50%; background: #e8b98a; margin: 0 auto 2px; }
+  .pk-keeper .k-body { width: 34px; height: 38px; border-radius: 9px; background: #ff9f1c; margin: 0 auto; position: relative; }
+  .pk-keeper .k-body::before, .pk-keeper .k-body::after { content: ""; position: absolute; top: 2px; width: 9px; height: 30px;
+    border-radius: 5px; background: #ff9f1c; }
+  .pk-keeper .k-body::before { left: -10px; transform: rotate(14deg); }
+  .pk-keeper .k-body::after  { right: -10px; transform: rotate(-14deg); }
+  .pk-keeper .k-legs { width: 26px; height: 14px; margin: 0 auto; border-left: 9px solid #2a2e33; border-right: 9px solid #2a2e33; }
+  .pk-keeper.dive-0 { transform: translate(-64px, -40px) rotate(-58deg); }
+  .pk-keeper.dive-1 { transform: translate( 64px, -40px) rotate( 58deg); }
+  .pk-keeper.dive-2 { transform: translate(-58px,  10px) rotate(-84deg); }
+  .pk-keeper.dive-3 { transform: translate( 58px,  10px) rotate( 84deg); }
+  .pk-ball { position: absolute; left: 50%; top: 84%; transform: translate(-50%, -50%); font-size: 34px; z-index: 3;
+    transition: left 0.42s cubic-bezier(0.2, 0.8, 0.4, 1), top 0.42s cubic-bezier(0.2, 0.8, 0.4, 1), font-size 0.42s;
+    filter: drop-shadow(0 3px 3px rgba(0,0,0,0.35)); user-select: none; -webkit-user-select: none; }
+  .pk-ball.fly-0 { left: 21%; top: 26%; font-size: 26px; }
+  .pk-ball.fly-1 { left: 79%; top: 26%; font-size: 26px; }
+  .pk-ball.fly-2 { left: 21%; top: 52%; font-size: 26px; }
+  .pk-ball.fly-3 { left: 79%; top: 52%; font-size: 26px; }
+  .pk-zone { position: absolute; width: 62px; height: 62px; margin: -31px 0 0 -31px; border-radius: 50%;
+    border: 2px dashed rgba(255,255,255,0.85); background: rgba(0,0,0,0.14); cursor: pointer; z-index: 4;
+    color: rgba(255,255,255,0.9); font-size: 11px; font-weight: 700; }
+  .pk-zone:active { background: rgba(255,255,255,0.22); }
+  .pk-zone[data-z="0"] { left: 21%; top: 26%; } .pk-zone[data-z="1"] { left: 79%; top: 26%; }
+  .pk-zone[data-z="2"] { left: 21%; top: 52%; } .pk-zone[data-z="3"] { left: 79%; top: 52%; }
+  #pkGame.anim .pk-zone { opacity: 0; pointer-events: none; }
+  .pk-flash { position: absolute; left: 0; right: 0; top: 40%; text-align: center; font-size: 34px; font-weight: 900;
+    color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.55); letter-spacing: 0.04em; opacity: 0;
+    transform: scale(0.6); transition: opacity 0.18s, transform 0.18s; z-index: 5; pointer-events: none; }
+  .pk-flash.show { opacity: 1; transform: scale(1); }
+  .pk-hint { text-align: center; font-size: 12.5px; color: var(--ink-2); padding: 10px 14px 12px; }
+  .pk-over { padding: 4px 16px 14px; }
+  .pk-over .pk-final { text-align: center; font-size: 15px; font-weight: 700; margin: 6px 0 2px; }
+  .pk-over .pk-sub { text-align: center; font-size: 12.5px; color: var(--ink-2); margin-bottom: 10px; }
+  .pk-names { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .pk-name { border: none; border-radius: 20px; color: #fff; font-weight: 700; font-size: 13.5px;
+    padding: 8px 16px; cursor: pointer; }
+  .pk-actions { display: flex; gap: 8px; justify-content: center; margin-top: 4px; }
+  .pk-actions button { border: none; border-radius: 20px; background: var(--chip-bg); color: var(--ink);
+    font-weight: 700; font-size: 13.5px; padding: 9px 18px; cursor: pointer; }
+  .pk-actions .pk-again { background: var(--brand); color: #fff; }
+  .pk-board { padding: 2px 16px 16px; }
+  .pk-board h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); margin: 10px 0 6px; }
+  .pk-board table { width: 100%; min-width: 0; border-collapse: collapse; font-size: 13.5px; }
+  .pk-board td { padding: 6px 4px; border-top: 1px solid var(--grid); }
+  .pk-board td.r { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .pk-board td.rk { width: 30px; color: var(--ink-2); }
+  .pk-board .empty-note, .pk-board .pk-err { font-size: 12.5px; color: var(--muted); padding: 6px 0; }
+
   /* --- Cinzel wordmark (header title only) --- */
   @font-face {
     font-family: 'Odyssey';
@@ -648,9 +718,11 @@
 
   <footer class="pagefoot">
     Base score = league points × team weight. Rewards & penalties update live with the tables.<br>
-    Data: ESPN & TheSportsDB · Built for the boys 🍻
+    Data: ESPN & TheSportsDB · Built for the boys <span id="pkEgg">🍻</span>
   </footer>
 </div>
+
+<div id="pkGame" hidden></div>
 
 <script>
 "use strict";
@@ -3066,6 +3138,178 @@ try {
     render(); if (state.raceEvents) { renderRecap(); renderRace(); }
   });
 } catch {}
+
+/* ================================================================
+   PK SHOOTOUT — hidden mini-game. Double-tap the 🍻 in the footer.
+   Live leaderboard shared by everyone, stored in Supabase (public
+   anon key — safe to publish; the table is append-only via RLS).
+   ================================================================ */
+const PK_API = {
+  url: "https://rdvstfufykzanzzhtavh.supabase.co",
+  key: "sb_publishable_qDq5nyUwfEkm83-QXKzafg_dZS7aRhX",
+};
+const pk = { score: 0, phase: "idle", busy: false, submitted: false, board: null,
+             best: parseInt(localStorage.getItem("loPkBest") || "0", 10) || 0 };
+
+function pkKeeperPick(shot) {
+  // the keeper studies you: every goal makes him a little more likely to read the shot
+  const pRead = Math.min(0.25 + 0.03 * pk.score, 0.60);
+  if (Math.random() < pRead) return shot;
+  const others = [0, 1, 2, 3].filter(z => z !== shot);
+  return others[Math.floor(Math.random() * 3)];
+}
+
+function pkOpen() {
+  pk.score = 0; pk.submitted = false; pk.phase = "aim"; pk.busy = false;
+  $("pkGame").hidden = false;
+  document.body.style.overflow = "hidden";
+  pkRender();
+  pkLoadBoard();
+}
+function pkClose() {
+  $("pkGame").hidden = true;
+  document.body.style.overflow = "";
+  pk.phase = "idle";
+}
+
+function pkRender() {
+  const el = $("pkGame");
+  const over = pk.phase === "over";
+  const namesRow = PLAYERS.map(p =>
+    `<button class="pk-name" data-name="${esc(p.name)}" style="background:${accent(p)}">${esc(p.name)}</button>`).join("");
+  el.classList.remove("anim");
+  el.innerHTML = `<div class="pk-modal"><div class="pk-card">
+    <div class="pk-head"><span class="pk-title">⚽ PK Shootout</span>
+      <span class="pk-streak" id="pkStreak">Streak: ${pk.score}</span>
+      <button class="pk-x" aria-label="Close">✕</button></div>
+    <div class="pk-stage">
+      <div class="pk-goal">
+        <div id="pkKeeper" class="pk-keeper"><div class="k-head"></div><div class="k-body"></div><div class="k-legs"></div></div>
+      </div>
+      <div id="pkBall" class="pk-ball">⚽</div>
+      <div id="pkFlash" class="pk-flash"></div>
+      ${over ? "" : [0, 1, 2, 3].map(z => `<button class="pk-zone" data-z="${z}" aria-label="Shoot zone ${z}"></button>`).join("")}
+    </div>
+    ${over ? `<div class="pk-over">
+        <div class="pk-final">${pk.score === 0 ? "Saved on your first kick 💀" : `Run over — ${pk.score} in a row`}</div>
+        <div class="pk-sub">Personal best on this phone: <b>${pk.best}</b></div>
+        ${pk.score > 0 && !pk.submitted ? `<div class="pk-sub">Post it to the leaderboard as:</div>
+          <div class="pk-names">${namesRow}</div>` : ""}
+        ${pk.submitted ? `<div class="pk-sub" style="color:var(--good)">✓ On the board.</div>` : ""}
+        ${pk.submitErr ? `<div class="pk-sub" style="color:var(--bad)">Couldn't reach the leaderboard — try again.</div>` : ""}
+        <div class="pk-actions"><button class="pk-again">Play again</button><button class="pk-quit">Close</button></div>
+      </div>`
+      : `<div class="pk-hint">Pick a corner. One save ends the run — and the keeper learns your habits.</div>`}
+    <div class="pk-board" id="pkBoard"></div>
+  </div></div>`;
+  pkRenderBoard();
+}
+
+function pkRenderBoard() {
+  const el = $("pkBoard");
+  if (!el) return;
+  const medals = ["🥇", "🥈", "🥉"];
+  let rows;
+  if (pk.board === null) rows = `<div class="empty-note">Loading leaderboard…</div>`;
+  else if (pk.board === "err") rows = `<div class="pk-err">Leaderboard unavailable right now — your run still counts here.</div>`;
+  else if (!pk.board.length) rows = `<div class="empty-note">No scores yet. Be the first.</div>`;
+  else rows = `<table><tbody>${pk.board.map((r, i) => `<tr>
+      <td class="rk">${medals[i] || i + 1}</td><td>${esc(r.name)}</td>
+      <td class="r">${r.score}</td>
+      <td class="r" style="color:var(--muted);font-weight:400">${r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : ""}</td>
+    </tr>`).join("")}</tbody></table>`;
+  el.innerHTML = `<h3>🏆 All-time leaderboard</h3>${rows}`;
+}
+
+async function pkLoadBoard() {
+  pk.board = null; pkRenderBoard();
+  try {
+    const res = await fetch(`${PK_API.url}/rest/v1/pk_scores?select=name,score,created_at&order=score.desc,created_at.asc&limit=10`,
+      { headers: { apikey: PK_API.key } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    pk.board = await res.json();
+  } catch (e) { pk.board = "err"; }
+  pkRenderBoard();
+}
+
+async function pkSubmit(name) {
+  if (pk.submitted || pk.score < 1) return;
+  pk.submitted = true; pk.submitErr = false;
+  try { localStorage.setItem("loPkName", name); } catch (e) {}
+  pkRender();
+  try {
+    const res = await fetch(`${PK_API.url}/rest/v1/pk_scores`, {
+      method: "POST",
+      headers: { apikey: PK_API.key, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ name, score: Math.min(pk.score, 500) }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await pkLoadBoard();
+  } catch (e) { pk.submitted = false; pk.submitErr = true; pkRender(); }
+}
+
+function pkFlash(text, good) {
+  const f = $("pkFlash");
+  if (!f) return;
+  f.textContent = text;
+  f.style.color = good ? "#7dffb8" : "#ffb3b3";
+  f.classList.add("show");
+}
+
+function pkShoot(zone) {
+  if (pk.phase !== "aim" || pk.busy) return;
+  pk.busy = true;
+  $("pkGame").classList.add("anim");
+  const dive = pkKeeperPick(zone);
+  const goal = dive !== zone;
+  $("pkBall").classList.add(`fly-${zone}`);
+  $("pkKeeper").classList.add(`dive-${dive}`);
+  setTimeout(() => {
+    if (goal) {
+      pk.score++;
+      const s = $("pkStreak"); if (s) s.textContent = `Streak: ${pk.score}`;
+      pkFlash("GOAL!", true);
+      setTimeout(() => {
+        const f = $("pkFlash"); if (f) f.classList.remove("show");
+        const b = $("pkBall"), k = $("pkKeeper");
+        if (b) b.className = "pk-ball"; if (k) k.className = "pk-keeper";
+        $("pkGame").classList.remove("anim");
+        pk.busy = false;
+      }, 750);
+    } else {
+      if (pk.score > pk.best) {
+        pk.best = pk.score;
+        try { localStorage.setItem("loPkBest", String(pk.best)); } catch (e) {}
+      }
+      pkFlash("SAVED", false);
+      setTimeout(() => { pk.phase = "over"; pk.busy = false; pkRender(); }, 850);
+    }
+  }, 480);
+}
+
+$("pkGame").addEventListener("click", (e) => {
+  const zone = e.target.closest(".pk-zone");
+  if (zone) return pkShoot(parseInt(zone.dataset.z, 10));
+  const name = e.target.closest(".pk-name");
+  if (name) return pkSubmit(name.dataset.name);
+  if (e.target.closest(".pk-again")) {
+    pk.score = 0; pk.submitted = false; pk.submitErr = false; pk.phase = "aim"; pk.busy = false;
+    pkRender(); return;
+  }
+  if (e.target.closest(".pk-x") || e.target.closest(".pk-quit")) return pkClose();
+  if (!e.target.closest(".pk-card")) return pkClose();   // tap the dark backdrop to leave
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("pkGame").hidden) pkClose(); });
+
+// The easter egg: double-tap the beers in the footer.
+(() => {
+  let lastTap = 0;
+  $("pkEgg").addEventListener("click", () => {
+    const now = Date.now();
+    if (now - lastTap < 450) { lastTap = 0; pkOpen(); }
+    else lastTap = now;
+  });
+})();
 
 loadAll();
 </script>
