@@ -1295,16 +1295,23 @@ async function loadFixtures(key) {
   const out = [];
   if (cfg.source.espn) {
     const d = mondayOf(new Date()), e = new Date(Date.now() + 30 * 86400000);   // from this week's Monday, so finished games stay visible
-    const ymd = (x) => `${x.getFullYear()}${String(x.getMonth() + 1).padStart(2, "0")}${String(x.getDate()).padStart(2, "0")}`;
-    const json = await fetchJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${cfg.source.espn}/scoreboard?dates=${ymd(d)}-${ymd(e)}`);
-    for (const ev of (json?.events || [])) {
+    // ESPN dropped the dates=START-END range form (HTTP 400 since Sep 2026) —
+    // fetch whole calendar months instead and trim to the window ourselves.
+    const ym = (x) => `${x.getFullYear()}${String(x.getMonth() + 1).padStart(2, "0")}`;
+    const months = [...new Set([ym(d), ym(e)])];
+    const chunks = await Promise.all(months.map(m =>
+      fetchJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${cfg.source.espn}/scoreboard?dates=${m}&limit=400`).catch(() => null)));
+    if (chunks.every(j => !j)) throw new Error("scoreboard unavailable");
+    for (const json of chunks) for (const ev of (json?.events || [])) {
       const comps = ev?.competitions?.[0]?.competitors || [];
       const home = comps.find(c => c.homeAway === "home"), away = comps.find(c => c.homeAway === "away");
       if (!home || !away || !ev.date) continue;
+      const when = new Date(ev.date);
+      if (when < d || when > e) continue;
       out.push({ id: ev.id || null,
                  home: home.team?.displayName, homeShort: home.team?.shortDisplayName,
                  away: away.team?.displayName, awayShort: away.team?.shortDisplayName,
-                 date: new Date(ev.date),
+                 date: when,
                  state: ev?.status?.type?.state || "pre",
                  clock: ev?.status?.displayClock || "",
                  hs: nint(home.score), as: nint(away.score) });
@@ -1805,7 +1812,7 @@ async function raceMonthGames(slug, y, m, current) {
   }
   const last = new Date(y, m + 1, 0).getDate();
   const mm = String(m + 1).padStart(2, "0");
-  const json = await fetchJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${y}${mm}01-${y}${mm}${last}&limit=500`).catch(() => null);
+  const json = await fetchJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${y}${mm}&limit=500`).catch(() => null);   // month form — ESPN's range form now 400s
   const games = [];
   for (const ev of (json?.events || [])) {
     const st = ev?.status?.type?.state || ev?.competitions?.[0]?.status?.type?.state;
@@ -2658,9 +2665,8 @@ async function loadLeagueSeason(lg) {
   for (let i = 0; i < 12; i++) {
     const y = i < 6 ? startYear : startYear + 1;
     const m = (6 + i) % 12 + 1;                                  // July → June
-    const last = new Date(y, m, 0).getDate();
     const mm = String(m).padStart(2, "0");
-    months.push(`${y}${mm}01-${y}${mm}${last}`);
+    months.push(`${y}${mm}`);                                    // month form — ESPN's range form now 400s
   }
   const chunks = await Promise.all(months.map(r =>
     fetchJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${cfg.source.espn}/scoreboard?dates=${r}&limit=500`).catch(() => null)));
